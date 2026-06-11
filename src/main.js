@@ -276,6 +276,9 @@ function returnToMainMenu() {
   ufo.group.position.set(0, 12, 18);
   ufo.group.rotation.set(0, Math.PI, 0);
   ufo.rim.rotation.z = 0;
+  ufo.trail.scale.set(1, 0.9, 1);
+  ufo.trail.material.opacity = 0.2;
+  ufo.engineGlow.intensity = 5.2;
   beam.visible = false;
 
   collectibles.forEach((item) => {
@@ -1285,14 +1288,18 @@ function updateUfo(delta, elapsed) {
 }
 
 function updateTakeoff(delta, elapsed) {
-  if (elapsed > takeoffUntil) return;
+  if (elapsed > takeoffUntil) {
+    ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0, 0.08);
+    ufo.trail.scale.set(1, 0.8, 1);
+    return;
+  }
   const progress = THREE.MathUtils.clamp(1 - (takeoffUntil - elapsed) / 4.2, 0, 1);
   const liftSpeed = THREE.MathUtils.lerp(18, 64, progress);
   ufo.group.position.y += liftSpeed * delta;
   ufo.group.rotation.x = THREE.MathUtils.lerp(ufo.group.rotation.x, -0.42, 0.08);
   ufo.group.rotation.z = THREE.MathUtils.lerp(ufo.group.rotation.z, 0, 0.08);
-  ufo.trail.scale.set(1.2, 2.8 + progress * 3.2, 1.2);
-  ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0.62, 0.12);
+  ufo.trail.scale.set(1.2 + progress * 0.6, 0.9, 1.2 + progress * 0.6);
+  ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0.18, 0.18);
   ufo.engineGlow.intensity = 14 + progress * 10;
 }
 
