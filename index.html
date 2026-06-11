@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UFO Cow Hunt</title>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <button id="settings-toggle" class="icon-button" type="button" aria-label="Einstellungen">Einstellungen</button>
+    <div id="hud" aria-live="polite">
+      <div class="score panel">
+        <span>Punkte</span>
+        <strong id="score">0</strong>
+        <small id="combo">Combo x1</small>
+      </div>
+      <div class="status panel">
+        <span id="target-count">0 Kuehe uebrig</span>
+        <span id="bonus-status">Bonus versteckt</span>
+        <span id="danger-status">Nacht ruhig</span>
+      </div>
+    </div>
+    <div id="radar" class="panel" aria-label="Minimap">
+      <canvas id="minimap" width="156" height="156"></canvas>
+      <div class="radar-label">Radar</div>
+    </div>
+    <div id="energy" class="panel">
+      <span>Beam-Energie</span>
+      <div class="meter"><i id="energy-fill"></i></div>
+      <small id="energy-label">100%</small>
+    </div>
+    <div id="message">
+      <strong>UFO Cow Hunt</strong>
+      <span>W/Pfeil hoch gibt Schub, A/D oder Pfeile drehen, S bremst, Leertaste beamt.</span>
+    </div>
+    <div id="start-screen" class="menu-panel panel" aria-live="polite">
+      <strong>UFO Cow Hunt</strong>
+      <span>Kuehe suchen, mit dem Lichtstrahl einsammeln und den Farm-Suchdrohnen ausweichen. Drohnen zerstoeren dich nicht, aber sie loesen Alarm aus und ziehen Beam-Energie.</span>
+      <div class="controls-grid">
+        <span>W / Hoch</span><b>Schub nach vorne</b>
+        <span>A / D</span><b>UFO drehen</b>
+        <span>S / Runter</span><b>Bremsen</b>
+        <span>Leertaste</span><b>Lichtstrahl</b>
+        <span>Shift</span><b>Boost</b>
+        <span>Esc</span><b>Einstellungen</b>
+      </div>
+      <label class="volume-row">
+        <span>UFO & Effekte</span>
+        <input id="start-volume" type="range" min="0" max="100" value="100" />
+        <b id="start-volume-value">100%</b>
+      </label>
+      <label class="volume-row">
+        <span>Musik</span>
+        <input id="start-music-volume" type="range" min="0" max="100" value="90" />
+        <b id="start-music-volume-value">90%</b>
+      </label>
+      <button id="start-button" class="primary-button" type="button">Mission starten</button>
+    </div>
+    <div id="settings-panel" class="menu-panel panel hidden" aria-live="polite">
+      <strong>Einstellungen</strong>
+      <label class="volume-row">
+        <span>UFO & Effekte</span>
+        <input id="settings-volume" type="range" min="0" max="100" value="100" />
+        <b id="settings-volume-value">100%</b>
+      </label>
+      <label class="volume-row">
+        <span>Musik</span>
+        <input id="settings-music-volume" type="range" min="0" max="100" value="90" />
+        <b id="settings-music-volume-value">90%</b>
+      </label>
+      <label class="toggle-row">
+        <input id="music-enabled" type="checkbox" checked />
+        <span>Musik eingeschaltet</span>
+      </label>
+      <button id="main-menu-button" class="primary-button secondary" type="button">Hauptmenue</button>
+      <button id="settings-close" class="primary-button secondary" type="button">Zurueck</button>
+    </div>
+    <div id="end-screen" class="panel hidden" aria-live="polite">
+      <strong>Mission abgeschlossen</strong>
+      <span id="final-time">Zeit: 00:00</span>
+      <span id="final-score">Punkte: 0</span>
+      <button id="restart-button" class="primary-button" type="button">Neu starten</button>
+    </div>
+  </body>
+</html>
