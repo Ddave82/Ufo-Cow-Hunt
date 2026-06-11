@@ -709,7 +709,7 @@ function addMeadowPatches() {
     patch.rotation.x = -Math.PI / 2;
     patch.rotation.z = i * 0.37;
     patch.position.set(x, terrainHeight(x, z) + 0.055, z);
-    patch.scale.set(4.8 + (i % 5) * 1.1, 2.2 + (i % 4) * 0.9, 1);
+    patch.scale.set(3.2 + (i % 5) * 0.72, 1.55 + (i % 4) * 0.55, 1);
     scene.add(patch);
   }
 }
@@ -795,7 +795,6 @@ function addFarmDetails() {
   addBarn(48, 48, -0.34);
   addFarmLanterns();
   addHayBales();
-  addFieldRows();
   addPathStones();
   addGrassClumps();
 }
@@ -846,7 +845,7 @@ function addRectFence(centerX, centerZ, width, depth, spacing) {
     addFenceLine(group, points, postGeometry, railGeometry, material, {
       postHeight: 1.18,
       railHeights: [0.56, 0.9],
-      skipWater: true
+      skipWater: false
     });
   });
 
@@ -940,9 +939,19 @@ function addHayBales() {
     [40, 42, 0.1],
     [43, 45, 0.6],
     [53, 40, -0.25],
+    [56, 46, 0.45],
+    [47, 35, -0.55],
     [-30, 48, 0.4],
     [-34, 44, -0.4],
-    [28, -16, 0.25]
+    [-41, 50, 0.2],
+    [-58, 55, -0.35],
+    [28, -16, 0.25],
+    [33, -20, -0.2],
+    [52, -27, 0.35],
+    [-3, 49, -0.45],
+    [8, 54, 0.28],
+    [63, 18, -0.1],
+    [69, 24, 0.52]
   ].forEach(([x, z, rotation], index) => {
     const spot = findDryObjectSpot(x, z, 3.6, 270 + index);
     const bale = new THREE.Mesh(geometry, material);
@@ -953,23 +962,6 @@ function addHayBales() {
     bale.receiveShadow = true;
     scene.add(bale);
   });
-}
-
-function addFieldRows() {
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x4b3a21,
-    roughness: 0.96
-  });
-  for (let i = 0; i < 7; i += 1) {
-    const x = -64 + i * 3.8;
-    const z = 58;
-    if (!isDryObjectSpot(x, z, 6.5)) continue;
-    const row = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.08, 28), material);
-    row.rotation.y = -0.24;
-    row.position.set(x, terrainHeight(x, z) + 0.08, z);
-    row.receiveShadow = true;
-    scene.add(row);
-  }
 }
 
 function addPathStones() {
@@ -1358,19 +1350,20 @@ function createBeam() {
 function spawnCollectibles() {
   const cowSpots = [
     [18, 22],
-    [25, 29],
-    [13, 33],
     [31, 18],
-    [-47, 45],
     [-55, 35],
-    [-40, 34],
     [-48, 24],
     [42, -30],
-    [53, -36],
-    [34, -42],
     [57, -24],
     [-6, 55],
-    [4, 48]
+    [8, 48],
+    [-70, 8],
+    [-66, 62],
+    [66, 33],
+    [73, -49],
+    [-31, -62],
+    [14, -66],
+    [2, 6]
   ];
 
   cowSpots.forEach(([x, z], index) => {
