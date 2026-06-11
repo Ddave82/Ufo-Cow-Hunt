@@ -80,6 +80,22 @@ const waterBodies = [
 const spawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 }
 ];
+const cowSpawnZones = [
+  { x: 22, z: 27, width: 34, depth: 24 },
+  { x: -48, z: 36, width: 33, depth: 28 },
+  { x: 48, z: -34, width: 35, depth: 28 },
+  { x: -2, z: 54, width: 31, depth: 20 },
+  { x: -58, z: 6, width: 28, depth: 26 },
+  { x: 64, z: 25, width: 28, depth: 24 },
+  { x: -24, z: -56, width: 32, depth: 24 },
+  { x: 17, z: -59, width: 28, depth: 22 }
+];
+const bonusSpawnZones = [
+  { x: -66, z: 28, width: 24, depth: 28 },
+  { x: 18, z: 63, width: 28, depth: 18 },
+  { x: 63, z: -20, width: 24, depth: 26 },
+  { x: -24, z: 60, width: 24, depth: 20 }
+];
 const keys = new Set();
 const collectibles = [];
 const powerups = [];
@@ -293,10 +309,8 @@ function returnToMainMenu() {
 
   collectibles.forEach((item) => {
     item.userData.collected = false;
-    item.visible = true;
-    item.position.y = item.userData.baseY;
-    item.rotation.z = 0;
   });
+  randomizeCollectiblePositions();
 
   powerups.forEach((item) => {
     item.userData.collected = false;
@@ -1290,7 +1304,7 @@ function createUfo() {
   const alienEyeMaterial = new THREE.MeshBasicMaterial({ color: 0x061315 });
   for (const x of [-0.13, 0.13]) {
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), alienEyeMaterial);
-    eye.position.set(x, 0.8, -0.3);
+    eye.position.set(x, 0.8, 0.3);
     eye.scale.set(1.15, 1.55, 0.6);
     alien.add(eye);
   }
@@ -1389,39 +1403,25 @@ function createCowHint() {
 }
 
 function spawnCollectibles() {
-  const cowSpots = [
-    [18, 22],
-    [34, 14],
-    [-54, 34],
-    [-38, 20],
-    [42, -30],
-    [58, -22],
-    [-8, 55],
-    [9, 47],
-    [-62, 4],
-    [-55, 61],
-    [66, 31],
-    [65, -45],
-    [-30, -55],
-    [18, -58],
-    [4, 6]
-  ];
+  const cowSpots = generateCowSpawnSpots();
 
-  cowSpots.forEach(([x, z], index) => {
+  cowSpots.forEach(({ x, z }, index) => {
     const cow = createCow(index);
-    const safeSpot = findDrySpot(x, z, index);
-    addCollectible(cow, "cow", safeSpot.x, safeSpot.z, 100);
+    addCollectible(cow, "cow", x, z, 100);
   });
 
-  const bonusSpot = [[-66, 28], [18, 63], [63, -20], [-24, 60]][Math.floor(Math.random() * 4)];
   const human = createBonusHuman();
-  const safeBonusSpot = findDrySpot(bonusSpot[0], bonusSpot[1], 99);
-  addCollectible(human, "bonus", safeBonusSpot.x, safeBonusSpot.z, 750);
+  const bonusSpot = findRandomSpawnSpot({
+    zones: bonusSpawnZones,
+    used: cowSpots,
+    minDistance: 16,
+    fallbackSeed: 99
+  });
+  addCollectible(human, "bonus", bonusSpot.x, bonusSpot.z, 750);
 }
 
 function addCollectible(group, type, x, z, points) {
-  group.position.set(x, collectibleBaseHeight(type, x, z), z);
-  group.rotation.y = Math.atan2(x, z) + Math.PI * 0.5;
+  positionCollectible(group, type, x, z);
   group.userData = {
     type,
     points,
@@ -1431,6 +1431,95 @@ function addCollectible(group, type, x, z, points) {
   };
   collectibles.push(group);
   scene.add(group);
+}
+
+function randomizeCollectiblePositions() {
+  const cowSpots = generateCowSpawnSpots();
+  let cowIndex = 0;
+
+  collectibles.forEach((item) => {
+    if (item.userData.type !== "cow") return;
+    const spot = cowSpots[cowIndex];
+    cowIndex += 1;
+    positionCollectible(item, "cow", spot.x, spot.z);
+    resetCollectibleState(item);
+  });
+
+  const bonusSpot = findRandomSpawnSpot({
+    zones: bonusSpawnZones,
+    used: cowSpots,
+    minDistance: 16,
+    fallbackSeed: 99
+  });
+
+  collectibles.forEach((item) => {
+    if (item.userData.type !== "bonus") return;
+    positionCollectible(item, "bonus", bonusSpot.x, bonusSpot.z);
+    resetCollectibleState(item);
+  });
+}
+
+function resetCollectibleState(item) {
+  item.visible = true;
+  item.rotation.z = 0;
+  item.userData.collected = false;
+  item.userData.wobble = Math.random() * Math.PI * 2;
+}
+
+function positionCollectible(group, type, x, z) {
+  group.position.set(x, collectibleBaseHeight(type, x, z), z);
+  group.rotation.y = Math.atan2(x, z) + Math.PI * 0.5;
+  if (group.userData) {
+    group.userData.baseY = group.position.y;
+  }
+}
+
+function generateCowSpawnSpots() {
+  const spots = [];
+  const cowCount = 15;
+
+  for (let index = 0; index < cowCount; index += 1) {
+    const zone = cowSpawnZones[index % cowSpawnZones.length];
+    spots.push(findRandomSpawnSpot({
+      zones: [zone],
+      used: spots,
+      minDistance: 9.5,
+      fallbackSeed: index
+    }));
+  }
+
+  return spots;
+}
+
+function findRandomSpawnSpot({ zones, used = [], minDistance = 9, fallbackSeed = 0 }) {
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const zone = zones[Math.floor(Math.random() * zones.length)];
+    const x = zone.x + (Math.random() - 0.5) * zone.width;
+    const z = zone.z + (Math.random() - 0.5) * zone.depth;
+    if (isSpawnCandidateSafe(x, z, used, minDistance)) return { x, z };
+  }
+
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const zone = zones[(attempt + fallbackSeed) % zones.length];
+    const angle = fallbackSeed * 1.37 + attempt * 2.11;
+    const radiusX = zone.width * (0.12 + ((attempt * 17) % 37) / 100);
+    const radiusZ = zone.depth * (0.12 + ((attempt * 23) % 37) / 100);
+    const x = zone.x + Math.cos(angle) * radiusX;
+    const z = zone.z + Math.sin(angle) * radiusZ;
+    if (isSpawnCandidateSafe(x, z, used, minDistance * 0.82)) return { x, z };
+  }
+
+  for (const zone of zones) {
+    const spot = findDrySpot(zone.x, zone.z, fallbackSeed);
+    if (isSpawnCandidateSafe(spot.x, spot.z, used, minDistance * 0.65)) return spot;
+  }
+
+  return findDrySpot(0, 0, fallbackSeed);
+}
+
+function isSpawnCandidateSafe(x, z, used, minDistance) {
+  if (!isSpawnSafe(x, z)) return false;
+  return used.every((spot) => Math.hypot(spot.x - x, spot.z - z) >= minDistance);
 }
 
 function collectibleBaseHeight(type, x, z) {
