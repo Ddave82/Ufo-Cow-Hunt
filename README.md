@@ -74,24 +74,6 @@ Preview des Production-Builds:
 npm run preview
 ```
 
-## Projektstruktur
-
-```text
-.
-├── index.html
-├── package.json
-├── sounds/
-│   ├── atmo.mp3
-│   ├── beam.mp3
-│   ├── countdown.mp3
-│   ├── music_1.mp3
-│   ├── music_2.mp3
-│   └── takeoff.mp3
-└── src/
-    ├── main.js
-    └── styles.css
-```
-
 ## Sound-Dateien
 
 Die Musik und Effekte liegen lokal im Ordner `sounds/` und werden beim Build von Vite als Assets gebuendelt.

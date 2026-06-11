@@ -470,6 +470,7 @@ function addLights() {
 
 function addLandscapeDetails() {
   addWater();
+  addBoundaryFence();
   addTrees();
   addRocks();
   addCropCircles();
@@ -495,6 +496,73 @@ function addWater() {
   water.scale.set(1.55, 0.72, 1);
   water.receiveShadow = true;
   scene.add(water);
+}
+
+function addBoundaryFence() {
+  const fenceInset = 3.6;
+  const fenceHalf = halfWorld - fenceInset;
+  const spacing = 7.5;
+  const segmentCount = Math.floor((fenceHalf * 2) / spacing);
+  const postCount = (segmentCount + 1) * 4;
+  const railCount = segmentCount * 8;
+
+  const postGeometry = new THREE.CylinderGeometry(0.13, 0.17, 1.45, 6);
+  const railGeometry = new THREE.BoxGeometry(spacing * 0.86, 0.13, 0.13);
+  const woodMaterial = new THREE.MeshStandardMaterial({
+    color: 0x5a3a22,
+    roughness: 0.88,
+    metalness: 0.02
+  });
+  const postMesh = new THREE.InstancedMesh(postGeometry, woodMaterial, postCount);
+  const railMesh = new THREE.InstancedMesh(railGeometry, woodMaterial, railCount);
+  let postIndex = 0;
+  let railIndex = 0;
+
+  const addPost = (x, z) => {
+    const y = terrainHeight(x, z);
+    tempObject.position.set(x, y + 0.72, z);
+    tempObject.rotation.set(0, 0, 0);
+    tempObject.scale.setScalar(1);
+    tempObject.updateMatrix();
+    postMesh.setMatrixAt(postIndex, tempObject.matrix);
+    postIndex += 1;
+  };
+
+  const addRail = (x, z, rotationY, heightOffset) => {
+    const y = terrainHeight(x, z);
+    tempObject.position.set(x, y + heightOffset, z);
+    tempObject.rotation.set(0, rotationY, 0);
+    tempObject.scale.setScalar(1);
+    tempObject.updateMatrix();
+    railMesh.setMatrixAt(railIndex, tempObject.matrix);
+    railIndex += 1;
+  };
+
+  for (let i = 0; i <= segmentCount; i += 1) {
+    const t = -fenceHalf + i * spacing;
+    addPost(t, -fenceHalf);
+    addPost(t, fenceHalf);
+    addPost(-fenceHalf, t);
+    addPost(fenceHalf, t);
+  }
+
+  for (let i = 0; i < segmentCount; i += 1) {
+    const t = -fenceHalf + (i + 0.5) * spacing;
+    for (const heightOffset of [0.82, 1.22]) {
+      addRail(t, -fenceHalf, 0, heightOffset);
+      addRail(t, fenceHalf, 0, heightOffset);
+      addRail(-fenceHalf, t, Math.PI / 2, heightOffset);
+      addRail(fenceHalf, t, Math.PI / 2, heightOffset);
+    }
+  }
+
+  postMesh.count = postIndex;
+  railMesh.count = railIndex;
+  postMesh.castShadow = true;
+  railMesh.castShadow = true;
+  postMesh.receiveShadow = true;
+  railMesh.receiveShadow = true;
+  scene.add(postMesh, railMesh);
 }
 
 function addTrees() {
