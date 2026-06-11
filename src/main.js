@@ -21,9 +21,25 @@ const energyFillNode = document.querySelector("#energy-fill");
 const energyLabelNode = document.querySelector("#energy-label");
 const messageNode = document.querySelector("#message");
 const endScreenNode = document.querySelector("#end-screen");
+const finalLevelNode = document.querySelector("#final-level");
 const finalTimeNode = document.querySelector("#final-time");
 const finalScoreNode = document.querySelector("#final-score");
+const breakdownAnimalsNode = document.querySelector("#breakdown-animals");
+const breakdownBoostersNode = document.querySelector("#breakdown-boosters");
+const breakdownHumanNode = document.querySelector("#breakdown-human");
+const breakdownWavesNode = document.querySelector("#breakdown-waves");
+const breakdownBonusNode = document.querySelector("#breakdown-bonus");
+const breakdownStatsNode = document.querySelector("#breakdown-stats");
+const levelScreenNode = document.querySelector("#level-screen");
+const confirmLevelButtonNode = document.querySelector("#confirm-level-button");
+const levelCardNodes = [...document.querySelectorAll(".level-card")];
 const startScreenNode = document.querySelector("#start-screen");
+const startKickerNode = document.querySelector("#start-kicker");
+const startCopyNode = document.querySelector("#start-copy");
+const beamTipNode = document.querySelector("#beam-tip");
+const animalTipLabelNode = document.querySelector("#animal-tip-label");
+const animalTipCopyNode = document.querySelector("#animal-tip-copy");
+const waveTipCopyNode = document.querySelector("#wave-tip-copy");
 const startButtonNode = document.querySelector("#start-button");
 const settingsToggleNode = document.querySelector("#settings-toggle");
 const settingsPanelNode = document.querySelector("#settings-panel");
@@ -38,7 +54,8 @@ const settingsMusicVolumeNode = document.querySelector("#settings-music-volume")
 const startMusicVolumeValueNode = document.querySelector("#start-music-volume-value");
 const settingsMusicVolumeValueNode = document.querySelector("#settings-music-volume-value");
 const musicEnabledNode = document.querySelector("#music-enabled");
-const mainMenuEndButtonNode = document.querySelector("#main-menu-end-button");
+const playAgainButtonNode = document.querySelector("#play-again-button");
+const chooseLevelButtonNode = document.querySelector("#choose-level-button");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x030713);
@@ -73,14 +90,20 @@ const tempVector2 = new THREE.Vector3();
 const worldSize = 170;
 const halfWorld = worldSize / 2;
 const terrainSegments = 112;
-const waterBodies = [
+const farmWaterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
 ];
-const spawnBlockers = [
+const desertWaterBodies = [
+  { x: -42, z: 18, rx: 11.5, rz: 7.2 }
+];
+const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 }
 ];
-const cowSpawnZones = [
+const desertSpawnBlockers = [
+  { x: -52, z: 47, rx: 9, rz: 7 }
+];
+const farmAnimalSpawnZones = [
   { x: 22, z: 27, width: 34, depth: 24 },
   { x: -48, z: 36, width: 33, depth: 28 },
   { x: 48, z: -34, width: 35, depth: 28 },
@@ -90,12 +113,32 @@ const cowSpawnZones = [
   { x: -24, z: -56, width: 32, depth: 24 },
   { x: 17, z: -59, width: 28, depth: 22 }
 ];
-const bonusSpawnZones = [
+const desertAnimalSpawnZones = [
+  { x: -58, z: -34, width: 31, depth: 25 },
+  { x: -20, z: 34, width: 34, depth: 24 },
+  { x: 42, z: 28, width: 32, depth: 26 },
+  { x: 58, z: -40, width: 30, depth: 25 },
+  { x: 0, z: -58, width: 34, depth: 22 },
+  { x: -62, z: 42, width: 25, depth: 22 },
+  { x: 22, z: 61, width: 30, depth: 19 },
+  { x: 66, z: 5, width: 24, depth: 24 }
+];
+const farmBonusSpawnZones = [
   { x: -66, z: 28, width: 24, depth: 28 },
   { x: 18, z: 63, width: 28, depth: 18 },
   { x: 63, z: -20, width: 24, depth: 26 },
   { x: -24, z: 60, width: 24, depth: 20 }
 ];
+const desertBonusSpawnZones = [
+  { x: -54, z: 50, width: 22, depth: 18 },
+  { x: 52, z: 45, width: 24, depth: 18 },
+  { x: 63, z: -17, width: 24, depth: 22 },
+  { x: -28, z: -63, width: 24, depth: 18 }
+];
+let waterBodies = farmWaterBodies;
+let spawnBlockers = farmSpawnBlockers;
+let cowSpawnZones = farmAnimalSpawnZones;
+let bonusSpawnZones = farmBonusSpawnZones;
 const keys = new Set();
 const collectibles = [];
 const powerups = [];
@@ -108,8 +151,78 @@ const waveConfigs = [
   { number: 3, cowGoal: 20, bonus: 1000 }
 ];
 const maxWaveCows = Math.max(...waveConfigs.map((wave) => wave.cowGoal));
+const levelObjects = [];
+const levelConfigs = {
+  farm: {
+    id: "farm",
+    displayName: "Farm Night",
+    cardTitle: "Farm / Cow Hunt",
+    kicker: "Night farm abduction run",
+    previewClass: "farm",
+    animalSingular: "cow",
+    animalPlural: "cows",
+    animalTitle: "Cows",
+    objectiveCopy: "Fly the UFO, abduct every cow, avoid search drones, and keep your beam charged with energy diamonds.",
+    beamTip: "Hover over cows or bonus targets.",
+    animalTip: "Beam them up for points.",
+    waveTip: "Clear 10, then 15, then 20 cows.",
+    waveStartHint: "Collect every cow to advance.",
+    calmText: "Rare bonus hidden",
+    alarmText: "Farm alarm!",
+    animalSpots: farmAnimalSpawnZones,
+    bonusSpots: farmBonusSpawnZones,
+    water: farmWaterBodies,
+    blockers: farmSpawnBlockers,
+    powerupSpots: [
+      [-62, 60],
+      [50, 36],
+      [69, -41],
+      [-22, -59],
+      [34, 6]
+    ],
+    hazardSpots: [
+      [24, 28, 17, 0.9],
+      [48, -34, 19, -0.82],
+      [-50, 35, 16, 1.05]
+    ]
+  },
+  desert: {
+    id: "desert",
+    displayName: "Desert Hunt",
+    cardTitle: "Desert / Camel Hunt",
+    kicker: "Warm desert abduction run",
+    previewClass: "desert",
+    animalSingular: "camel",
+    animalPlural: "camels",
+    animalTitle: "Camels",
+    objectiveCopy: "Fly the UFO across dunes, abduct every camel, dodge search drones, and recharge with energy diamonds.",
+    beamTip: "Hover over camels or bonus travelers.",
+    animalTip: "Beam them up for points.",
+    waveTip: "Clear 10, then 15, then 20 camels.",
+    waveStartHint: "Collect every camel to advance.",
+    calmText: "Traveler hidden",
+    alarmText: "Desert alarm!",
+    animalSpots: desertAnimalSpawnZones,
+    bonusSpots: desertBonusSpawnZones,
+    water: desertWaterBodies,
+    blockers: desertSpawnBlockers,
+    powerupSpots: [
+      [-54, 50],
+      [42, 30],
+      [66, -12],
+      [-30, -58],
+      [6, 6]
+    ],
+    hazardSpots: [
+      [-23, 31, 18, 0.82],
+      [48, -36, 20, -0.88],
+      [58, 14, 16, 1.05]
+    ]
+  }
+};
 
 let score = 0;
+let scoreBreakdown = createEmptyScoreBreakdown();
 let combo = 1;
 let lastCollectTime = -Infinity;
 let firstMove = false;
@@ -126,6 +239,8 @@ let currentWaveIndex = 0;
 let waveCowGoal = waveConfigs[0].cowGoal;
 let waveCowsCollected = 0;
 let totalCowsCollected = 0;
+let selectedLevelId = "farm";
+let activeLevelId = "farm";
 let waveTransitionActive = false;
 let waveTransitionTimers = [];
 let soundMuted = false;
@@ -156,12 +271,10 @@ const ufoState = {
   yaw: Math.PI
 };
 
-const terrain = createTerrain();
-scene.add(terrain);
+let terrain = null;
 
 addNightSky();
 addLights();
-addLandscapeDetails();
 
 const ufo = createUfo();
 scene.add(ufo.group);
@@ -172,9 +285,7 @@ ufo.group.add(beam);
 const cowHint = createCowHint();
 scene.add(cowHint);
 
-spawnCollectibles();
-spawnPowerups();
-spawnHazards();
+applyLevel("farm");
 updateHud(true);
 
 window.addEventListener("resize", onResize);
@@ -183,8 +294,13 @@ window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", (event) => {
   keys.delete(normalizeKey(event));
 });
+levelCardNodes.forEach((card) => {
+  card.addEventListener("click", () => selectLevel(card.dataset.level));
+});
+confirmLevelButtonNode.addEventListener("click", confirmSelectedLevel);
 startButtonNode.addEventListener("click", startGame);
-mainMenuEndButtonNode.addEventListener("click", returnToMainMenu);
+playAgainButtonNode.addEventListener("click", playAgain);
+chooseLevelButtonNode.addEventListener("click", returnToMainMenu);
 settingsToggleNode.addEventListener("click", () => {
   openSettings();
 });
@@ -243,7 +359,7 @@ function onKeyDown(event) {
   if (!gameStarted) {
     if ((key === "Space" || key === "Enter") && !event.repeat) {
       event.preventDefault();
-      startGame();
+      if (!startScreenNode.classList.contains("hidden")) startGame();
     }
     return;
   }
@@ -286,7 +402,12 @@ function startGame() {
   messageNode.classList.add("hidden");
   initAudio();
   clock.getDelta();
-  showWaveMessage("WAVE 1 START", `COWS: 0 / ${waveConfigs[0].cowGoal}`, "Collect every cow to advance.");
+  const level = getActiveLevel();
+  showWaveMessage(
+    "WAVE 1 START",
+    `${level.animalPlural.toUpperCase()}: 0 / ${waveConfigs[0].cowGoal}`,
+    level.waveStartHint
+  );
   waveTransitionTimers.push(window.setTimeout(() => {
     messageNode.classList.add("hidden");
     messageNode.classList.remove("wave-message");
@@ -297,12 +418,41 @@ function returnToMainMenu() {
   resetRunState();
   gameStarted = false;
   firstMove = false;
-  startScreenNode.classList.remove("hidden");
+  levelScreenNode.classList.remove("hidden");
+  startScreenNode.classList.add("hidden");
   settingsPanelNode.classList.add("hidden");
   endScreenNode.classList.add("hidden");
   messageNode.classList.add("hidden");
   updateHud(true, clock.elapsedTime);
   clock.getDelta();
+}
+
+function selectLevel(levelId) {
+  if (!levelConfigs[levelId]) return;
+  selectedLevelId = levelId;
+  levelCardNodes.forEach((card) => {
+    const selected = card.dataset.level === selectedLevelId;
+    card.classList.toggle("selected", selected);
+    card.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+  applyLevel(levelId);
+}
+
+function confirmSelectedLevel() {
+  applyLevel(selectedLevelId);
+  levelScreenNode.classList.add("hidden");
+  startScreenNode.classList.remove("hidden");
+  endScreenNode.classList.add("hidden");
+  settingsPanelNode.classList.add("hidden");
+  updateStartScreenText();
+}
+
+function playAgain() {
+  applyLevel(selectedLevelId);
+  levelScreenNode.classList.add("hidden");
+  startScreenNode.classList.add("hidden");
+  endScreenNode.classList.add("hidden");
+  startGame();
 }
 
 function resetRunState() {
@@ -314,6 +464,7 @@ function resetRunState() {
   abductingTarget = null;
   bonusCollected = false;
   score = 0;
+  scoreBreakdown = createEmptyScoreBreakdown();
   combo = 1;
   lastCollectTime = -Infinity;
   beamEnergy = 100;
@@ -347,6 +498,82 @@ function resetRunState() {
     item.visible = true;
     item.position.y = item.userData.baseY;
   });
+}
+
+function applyLevel(levelId) {
+  if (!levelConfigs[levelId]) return;
+  activeLevelId = levelId;
+  selectedLevelId = levelId;
+  const level = getActiveLevel();
+  waterBodies = level.water;
+  spawnBlockers = level.blockers;
+  cowSpawnZones = level.animalSpots;
+  bonusSpawnZones = level.bonusSpots;
+  document.body.dataset.previewLevel = level.previewClass;
+  scene.background = new THREE.Color(level.id === "desert" ? 0x120b14 : 0x030713);
+  scene.fog = new THREE.FogExp2(level.id === "desert" ? 0x2a1723 : 0x061226, level.id === "desert" ? 0.010 : 0.012);
+  renderer.toneMappingExposure = level.id === "desert" ? 1.28 : 1.18;
+  rebuildLevel();
+  updateStartScreenText();
+  updateHud(true, clock.elapsedTime);
+}
+
+function rebuildLevel() {
+  clearLevelObjects();
+  collectibles.length = 0;
+  powerups.length = 0;
+  hazards.length = 0;
+  waterSurfaces.length = 0;
+  waterRipples.length = 0;
+  terrain = createTerrain();
+  addLevelObject(terrain);
+  addLandscapeDetails();
+  spawnCollectibles();
+  spawnPowerups();
+  spawnHazards();
+}
+
+function clearLevelObjects() {
+  levelObjects.forEach((object) => {
+    scene.remove(object);
+  });
+  levelObjects.length = 0;
+  terrain = null;
+}
+
+function addLevelObject(...objects) {
+  objects.forEach((object) => {
+    if (!object) return;
+    levelObjects.push(object);
+    scene.add(object);
+  });
+}
+
+function getActiveLevel() {
+  return levelConfigs[activeLevelId] || levelConfigs.farm;
+}
+
+function updateStartScreenText() {
+  const level = getActiveLevel();
+  startKickerNode.textContent = level.kicker;
+  startCopyNode.textContent = level.objectiveCopy;
+  beamTipNode.textContent = level.beamTip;
+  animalTipLabelNode.textContent = level.animalTitle;
+  animalTipCopyNode.textContent = level.animalTip;
+  waveTipCopyNode.textContent = level.waveTip;
+}
+
+function createEmptyScoreBreakdown() {
+  return {
+    animalScore: 0,
+    boosterScore: 0,
+    humanBonusScore: 0,
+    waveBonusScore: 0,
+    energyBonusScore: 0,
+    animalsCollectedTotal: 0,
+    boostersCollectedTotal: 0,
+    humansCollectedTotal: 0
+  };
 }
 
 function setVolume(value, preview = false) {
@@ -412,19 +639,30 @@ function createTerrain() {
       Math.sin(x * 0.43 + z * 0.19) * 0.018 +
       Math.cos(x * 0.25 - z * 0.37) * 0.012 +
       Math.sin((x - z) * 0.61) * 0.008;
-    const meadow =
-      0.19 +
-      height * 0.01 +
-      dryLand * 0.025 +
-      detail;
+    if (activeLevelId === "desert") {
+      const dune = desertDuneAmount(x, z);
+      const sandLight = 0.31 + height * 0.012 + dune * 0.08 + detail * 0.65;
+      color.setHSL(0.105 + Math.sin(x * 0.025) * 0.01, 0.56, sandLight);
+      if (path > 0.2) color.setHSL(0.09, 0.42, 0.27 + path * 0.045 + detail * 0.2);
+      if (shore > 0.08) color.setHSL(0.12, 0.36, 0.25 + shore * 0.09);
+      if (ridge > 0.42) color.setHSL(0.08, 0.38, 0.31 + ridge * 0.08 + detail * 0.2);
+      if (height > 5.4) color.setHSL(0.075, 0.36, 0.36 + height * 0.006);
+      if (water) color.setHSL(0.51, 0.62, 0.19 + Math.max(0, shore) * 0.03);
+    } else {
+      const meadow =
+        0.19 +
+        height * 0.01 +
+        dryLand * 0.025 +
+        detail;
 
-    color.setHSL(0.25 + Math.sin(x * 0.04) * 0.02, 0.52, meadow);
-    if (pasture > 0.25) color.setHSL(0.29, 0.5, 0.21 + pasture * 0.055 + detail * 0.35);
-    if (path > 0.24) color.setHSL(0.1, 0.34, 0.2 + path * 0.055 + detail * 0.2);
-    if (shore > 0.08) color.setHSL(0.13, 0.28, 0.17 + shore * 0.075);
-    if (ridge > 0.42) color.setHSL(0.16, 0.34, 0.19 + ridge * 0.09 + detail * 0.2);
-    if (height > 5.4) color.setHSL(0.12, 0.3, 0.32 + height * 0.006);
-    if (water) color.setHSL(0.53, 0.54, 0.14 + Math.max(0, shore) * 0.02);
+      color.setHSL(0.25 + Math.sin(x * 0.04) * 0.02, 0.52, meadow);
+      if (pasture > 0.25) color.setHSL(0.29, 0.5, 0.21 + pasture * 0.055 + detail * 0.35);
+      if (path > 0.24) color.setHSL(0.1, 0.34, 0.2 + path * 0.055 + detail * 0.2);
+      if (shore > 0.08) color.setHSL(0.13, 0.28, 0.17 + shore * 0.075);
+      if (ridge > 0.42) color.setHSL(0.16, 0.34, 0.19 + ridge * 0.09 + detail * 0.2);
+      if (height > 5.4) color.setHSL(0.12, 0.3, 0.32 + height * 0.006);
+      if (water) color.setHSL(0.53, 0.54, 0.14 + Math.max(0, shore) * 0.02);
+    }
     colors.push(color.r, color.g, color.b);
   }
 
@@ -443,6 +681,7 @@ function createTerrain() {
 }
 
 function terrainHeight(x, z) {
+  if (activeLevelId === "desert") return desertTerrainHeight(x, z);
   const water = isWater(x, z);
   const lakeSink = water ? -1.55 : 0;
   const shoreLift = shoreAmount(x, z) * 0.46;
@@ -465,7 +704,41 @@ function terrainHeight(x, z) {
   return Math.max(baseHeight, -0.72 + dryLand * 0.34);
 }
 
+function desertTerrainHeight(x, z) {
+  const water = isWater(x, z);
+  const lakeSink = water ? -1.25 : 0;
+  const shoreLift = shoreAmount(x, z) * 0.32;
+  const dune =
+    Math.sin(x * 0.052 + z * 0.018) * 2.6 +
+    Math.cos(z * 0.046 - x * 0.021) * 2.3 +
+    Math.sin((x + z) * 0.035) * 1.6 +
+    Math.cos((x - z) * 0.026) * 1.1 +
+    desertRidgeAmount(x, z) * 3.2 +
+    shoreLift +
+    lakeSink;
+
+  if (water) return dune;
+  return Math.max(dune, -0.46);
+}
+
+function desertDuneAmount(x, z) {
+  return THREE.MathUtils.clamp(
+    (Math.sin(x * 0.045 + z * 0.02) + Math.cos(z * 0.04 - x * 0.018) + 2) * 0.25,
+    0,
+    1
+  );
+}
+
+function desertRidgeAmount(x, z) {
+  return Math.max(
+    0,
+    Math.max(0, 1 - Math.abs(x * 0.03 + z * 0.019 - 0.2)),
+    Math.max(0, 1 - Math.abs(x * -0.024 + z * 0.032 + 1.0))
+  );
+}
+
 function ridgeAmount(x, z) {
+  if (activeLevelId === "desert") return desertRidgeAmount(x, z);
   return Math.max(
     0,
     Math.max(0, 1 - Math.abs(x * 0.034 + z * 0.016 - 0.7)),
@@ -492,6 +765,13 @@ function shoreAmount(x, z) {
 }
 
 function dryLandAmount(x, z) {
+  if (activeLevelId === "desert") {
+    return Math.max(
+      1 - distanceToSegment(x, z, -72, -42, 64, 38) / 12,
+      1 - distanceToSegment(x, z, -62, 43, 54, -34) / 10,
+      softRectAmount(x, z, -52, 47, 32, 20) * 0.65
+    );
+  }
   return Math.max(
     pastureAmount(x, z) * 0.62,
     softRectAmount(x, z, 54, 43, 31, 26),
@@ -502,6 +782,15 @@ function dryLandAmount(x, z) {
 }
 
 function pathAmount(x, z) {
+  if (activeLevelId === "desert") {
+    return Math.max(
+      0,
+      1 - distanceToSegment(x, z, -78, -44, -28, -18) / 5.2,
+      1 - distanceToSegment(x, z, -28, -18, 20, 3) / 4.8,
+      1 - distanceToSegment(x, z, 20, 3, 70, 38) / 5.5,
+      1 - distanceToSegment(x, z, -52, 48, 44, -32) / 4.4
+    );
+  }
   return Math.max(
     0,
     1 - distanceToSegment(x, z, -78, 60, -38, 40) / 5.4,
@@ -512,6 +801,14 @@ function pathAmount(x, z) {
 }
 
 function pastureAmount(x, z) {
+  if (activeLevelId === "desert") {
+    return Math.max(
+      softRectAmount(x, z, -58, -34, 30, 24),
+      softRectAmount(x, z, -20, 34, 32, 22),
+      softRectAmount(x, z, 42, 28, 30, 24),
+      softRectAmount(x, z, 58, -40, 28, 22)
+    );
+  }
   return Math.max(
     softRectAmount(x, z, 22, 27, 34, 25),
     softRectAmount(x, z, -48, 36, 32, 28),
@@ -599,6 +896,17 @@ function addLights() {
 }
 
 function addLandscapeDetails() {
+  if (activeLevelId === "desert") {
+    addWater();
+    addDesertGroundDetails();
+    addBoundaryFence();
+    addDesertDetails();
+    addRocks();
+    addClouds();
+    addFireflies();
+    return;
+  }
+
   addWater();
   addShoreDetails();
   addMeadowPatches();
@@ -609,6 +917,176 @@ function addLandscapeDetails() {
   addCropCircles();
   addClouds();
   addFireflies();
+}
+
+function addDesertGroundDetails() {
+  const patchMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffd487,
+    transparent: true,
+    opacity: 0.11,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x7b4b2a,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const geometry = new THREE.CircleGeometry(1, 24);
+
+  for (let i = 0; i < 32; i += 1) {
+    const x = ((i * 37) % 144) - 72 + Math.sin(i * 1.1) * 4.5;
+    const z = ((i * 53) % 144) - 72 + Math.cos(i * 0.8) * 4.5;
+    if (!isDryObjectSpot(x, z, 6) || isWater(x, z, 10)) continue;
+    const patch = new THREE.Mesh(geometry, i % 3 === 0 ? shadowMaterial : patchMaterial);
+    patch.rotation.x = -Math.PI / 2;
+    patch.rotation.z = i * 0.41;
+    patch.position.set(x, terrainHeight(x, z) + 0.06, z);
+    patch.scale.set(5 + (i % 6) * 0.9, 1.2 + (i % 5) * 0.36, 1);
+    addLevelObject(patch);
+  }
+}
+
+function addDesertDetails() {
+  addDesertCamp();
+  addCacti();
+  addDryShrubs();
+  addDesertMarkers();
+}
+
+function addDesertCamp() {
+  const spot = findDryObjectSpot(-52, 47, 9, 610);
+  const group = new THREE.Group();
+  const cloth = new THREE.MeshStandardMaterial({
+    color: 0xd6a45a,
+    emissive: 0x241006,
+    roughness: 0.86
+  });
+  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x4d2c1c, roughness: 0.9 });
+  const rugMaterial = new THREE.MeshBasicMaterial({
+    color: 0x7c2c34,
+    transparent: true,
+    opacity: 0.86,
+    side: THREE.DoubleSide
+  });
+
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 3.4), rugMaterial);
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.y = 0.08;
+
+  const tent = new THREE.Mesh(new THREE.ConeGeometry(3.4, 3.3, 4), cloth);
+  tent.rotation.y = Math.PI / 4;
+  tent.scale.z = 0.62;
+  tent.position.y = 1.7;
+  tent.castShadow = true;
+  tent.receiveShadow = true;
+
+  for (const x of [-2.2, 2.2]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.7, 6), poleMaterial);
+    pole.position.set(x, 1.35, 0);
+    pole.castShadow = true;
+    group.add(pole);
+  }
+
+  const lamp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.28, 12, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffd67a })
+  );
+  lamp.position.set(0, 1.5, -2.2);
+  const glow = new THREE.PointLight(0xffa95c, 1.2, 13, 1.8);
+  glow.position.copy(lamp.position);
+
+  group.add(rug, tent, lamp, glow);
+  group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.04, spot.z);
+  group.rotation.y = -0.35;
+  addLevelObject(group);
+}
+
+function addCacti() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x2d7a53,
+    emissive: 0x0a2116,
+    roughness: 0.92
+  });
+  const trunkGeometry = new THREE.CylinderGeometry(0.28, 0.34, 2.6, 7);
+  const armGeometry = new THREE.CylinderGeometry(0.16, 0.19, 1.25, 7);
+
+  for (let i = 0; i < 46; i += 1) {
+    const x = ((i * 43) % 150) - 75 + Math.sin(i * 0.7) * 3.2;
+    const z = ((i * 59) % 150) - 75 + Math.cos(i * 1.2) * 3.2;
+    if (!isDryObjectSpot(x, z, 4.8) || pastureAmount(x, z) > 0.66 || pathAmount(x, z) > 0.36) continue;
+    const scale = 0.72 + (i % 5) * 0.1;
+    const group = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkGeometry, material);
+    trunk.position.y = 1.3 * scale;
+    trunk.scale.setScalar(scale);
+    trunk.castShadow = true;
+    group.add(trunk);
+
+    if (i % 3 !== 0) {
+      for (const side of [-1, 1]) {
+        const arm = new THREE.Mesh(armGeometry, material);
+        arm.position.set(side * 0.46 * scale, 1.55 * scale, 0);
+        arm.rotation.z = side * Math.PI / 2.4;
+        arm.scale.setScalar(scale);
+        arm.castShadow = true;
+        group.add(arm);
+      }
+    }
+
+    group.position.set(x, terrainHeight(x, z), z);
+    group.rotation.y = i * 0.37;
+    addLevelObject(group);
+  }
+}
+
+function addDryShrubs() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x7f6a35,
+    roughness: 0.96
+  });
+  const geometry = new THREE.ConeGeometry(0.34, 0.72, 5);
+  const shrubs = new THREE.InstancedMesh(geometry, material, 100);
+  let count = 0;
+
+  for (let i = 0; i < 100; i += 1) {
+    const x = ((i * 29) % 152) - 76 + Math.sin(i * 1.9) * 2.6;
+    const z = ((i * 71) % 152) - 76 + Math.cos(i * 1.3) * 2.6;
+    if (!isDryObjectSpot(x, z, 3.2) || isWater(x, z, 9)) continue;
+    const scale = 0.45 + (i % 4) * 0.09;
+    tempObject.position.set(x, terrainHeight(x, z) + 0.32 * scale, z);
+    tempObject.rotation.set(0, i * 0.93, 0);
+    tempObject.scale.set(scale, scale * 0.8, scale);
+    tempObject.updateMatrix();
+    shrubs.setMatrixAt(count, tempObject.matrix);
+    count += 1;
+  }
+
+  shrubs.count = count;
+  shrubs.castShadow = true;
+  shrubs.receiveShadow = true;
+  addLevelObject(shrubs);
+}
+
+function addDesertMarkers() {
+  const material = new THREE.MeshStandardMaterial({ color: 0x9b7646, roughness: 0.88 });
+  [
+    [-18, -14],
+    [18, 4],
+    [46, 24],
+    [-40, 34]
+  ].forEach(([x, z], index) => {
+    const spot = findDryObjectSpot(x, z, 3.5, 720 + index);
+    const marker = new THREE.Mesh(new THREE.ConeGeometry(0.75, 2.4, 4), material);
+    marker.position.set(spot.x, terrainHeight(spot.x, spot.z) + 1.2, spot.z);
+    marker.rotation.y = Math.PI / 4 + index * 0.2;
+    marker.scale.set(1, 1, 0.72);
+    marker.castShadow = true;
+    marker.receiveShadow = true;
+    addLevelObject(marker);
+  });
 }
 
 function addWater() {
@@ -642,7 +1120,7 @@ function addWater() {
     shore.position.set(body.x, terrainHeight(body.x, body.z) + 0.035, body.z);
     shore.scale.set(body.rx, body.rz, 1);
     shore.receiveShadow = true;
-    scene.add(shore);
+    addLevelObject(shore);
 
     const water = new THREE.Mesh(new THREE.CircleGeometry(1, 72), waterMaterial);
     water.rotation.x = -Math.PI / 2;
@@ -652,7 +1130,7 @@ function addWater() {
     water.name = `moonlit-pond-${index}`;
     water.userData = { waveOffset: index * 0.8 + body.x * 0.03 };
     waterSurfaces.push(water);
-    scene.add(water);
+    addLevelObject(water);
 
     for (let ripple = 0; ripple < 3; ripple += 1) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(0.18 + ripple * 0.18, 0.2 + ripple * 0.18, 64), rippleMaterial);
@@ -670,7 +1148,7 @@ function addWater() {
         rippleOffset: index * 1.3 + ripple * 0.8
       };
       waterRipples.push(ring);
-      scene.add(ring);
+      addLevelObject(ring);
     }
   });
 }
@@ -723,7 +1201,7 @@ function addShoreDetails() {
   reedMesh.castShadow = true;
   pebbleMesh.castShadow = true;
   pebbleMesh.receiveShadow = true;
-  scene.add(reedMesh, pebbleMesh);
+  addLevelObject(reedMesh, pebbleMesh);
 }
 
 function addMeadowPatches() {
@@ -753,7 +1231,7 @@ function addMeadowPatches() {
     patch.rotation.z = i * 0.37;
     patch.position.set(x, terrainHeight(x, z) + 0.055, z);
     patch.scale.set(3.2 + (i % 5) * 0.72, 1.55 + (i % 4) * 0.55, 1);
-    scene.add(patch);
+    addLevelObject(patch);
   }
 }
 
@@ -791,7 +1269,7 @@ function addBoundaryFence() {
     });
   });
 
-  scene.add(group);
+  addLevelObject(group);
 }
 
 function addFenceLine(group, points, postGeometry, railGeometry, material, options) {
@@ -892,7 +1370,7 @@ function addRectFence(centerX, centerZ, width, depth, spacing) {
     });
   });
 
-  scene.add(group);
+  addLevelObject(group);
 }
 
 function addBarn(x, z, rotationY = 0) {
@@ -941,7 +1419,7 @@ function addBarn(x, z, rotationY = 0) {
   group.add(foundation, body, roof, door, loft, warmWindow);
   group.rotation.y = rotationY;
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.02, spot.z);
-  scene.add(group);
+  addLevelObject(group);
 }
 
 function addFarmLanterns() {
@@ -966,7 +1444,7 @@ function addFarmLanterns() {
     group.add(post, lamp, glow);
     group.position.set(spot.x, terrainHeight(spot.x, spot.z), spot.z);
     group.rotation.y = index * 0.4;
-    scene.add(group);
+    addLevelObject(group);
   });
 }
 
@@ -1003,7 +1481,7 @@ function addHayBales() {
     bale.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.72, spot.z);
     bale.castShadow = true;
     bale.receiveShadow = true;
-    scene.add(bale);
+    addLevelObject(bale);
   });
 }
 
@@ -1030,7 +1508,7 @@ function addPathStones() {
     stone.scale.set(0.6 + (index % 4) * 0.1, 0.16, 0.42 + (index % 3) * 0.08);
     stone.rotation.set(index * 0.13, index * 0.41, index * 0.07);
     stone.receiveShadow = true;
-    scene.add(stone);
+    addLevelObject(stone);
   });
 }
 
@@ -1059,7 +1537,7 @@ function addGrassClumps() {
   clumps.count = count;
   clumps.castShadow = true;
   clumps.receiveShadow = true;
-  scene.add(clumps);
+  addLevelObject(clumps);
 }
 
 function addTrees() {
@@ -1119,7 +1597,7 @@ function addTrees() {
   crownMesh.count = count;
   trunkMesh.castShadow = true;
   crownMesh.castShadow = true;
-  scene.add(trunkMesh, crownMesh);
+  addLevelObject(trunkMesh, crownMesh);
 }
 
 function addRocks() {
@@ -1165,7 +1643,7 @@ function addRocks() {
   rockMesh.count = count;
   rockMesh.castShadow = true;
   rockMesh.receiveShadow = true;
-  scene.add(rockMesh);
+  addLevelObject(rockMesh);
 }
 
 function addCropCircles() {
@@ -1186,7 +1664,7 @@ function addCropCircles() {
     const circle = new THREE.Mesh(new THREE.RingGeometry(radius * 0.64, radius, 48), material);
     circle.rotation.x = -Math.PI / 2;
     circle.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.12, spot.z);
-    scene.add(circle);
+    addLevelObject(circle);
   });
 }
 
@@ -1209,7 +1687,7 @@ function addClouds() {
     }
     cloud.position.set(((i * 29) % 146) - 73, 22 + (i % 4) * 2.8, ((i * 43) % 148) - 74);
     cloud.rotation.y = i * 0.33;
-    scene.add(cloud);
+    addLevelObject(cloud);
   }
 }
 
@@ -1232,7 +1710,7 @@ function addFireflies() {
     })
   );
   fireflies.name = "fireflies";
-  scene.add(fireflies);
+  addLevelObject(fireflies);
 }
 
 function createUfo() {
@@ -1429,11 +1907,11 @@ function spawnCollectibles() {
   const cowSpots = generateCowSpawnSpots(maxWaveCows);
 
   cowSpots.forEach(({ x, z }, index) => {
-    const cow = createCow(index);
-    addCollectible(cow, "cow", x, z, 100);
+    const animal = createAnimal(index);
+    addCollectible(animal, "animal", x, z, 100);
   });
 
-  const human = createBonusHuman();
+  const human = createHumanForLevel();
   const bonusSpot = findRandomSpawnSpot({
     zones: bonusSpawnZones,
     used: cowSpots,
@@ -1460,7 +1938,7 @@ function addCollectible(group, type, x, z, points) {
     wanderPauseUntil: 0
   };
   collectibles.push(group);
-  scene.add(group);
+  addLevelObject(group);
 }
 
 function prepareWave(waveIndex) {
@@ -1477,10 +1955,10 @@ function prepareWave(waveIndex) {
   let cowIndex = 0;
 
   collectibles.forEach((item) => {
-    if (item.userData.type !== "cow") return;
+    if (item.userData.type !== "animal") return;
     if (cowIndex < waveCowGoal) {
       const spot = cowSpots[cowIndex];
-      positionCollectible(item, "cow", spot.x, spot.z);
+      positionCollectible(item, "animal", spot.x, spot.z);
       resetCollectibleState(item, true);
     } else {
       resetCollectibleState(item, false);
@@ -1575,9 +2053,13 @@ function isSpawnCandidateSafe(x, z, used, minDistance) {
 }
 
 function collectibleBaseHeight(type, x, z) {
-  if (type === "cow") return maxTerrainHeightAround(x, z, 1.45) + 0.12;
+  if (type === "animal") return maxTerrainHeightAround(x, z, activeLevelId === "desert" ? 1.7 : 1.45) + 0.12;
   if (type === "bonus") return maxTerrainHeightAround(x, z, 0.8) + 0.08;
   return terrainHeight(x, z);
+}
+
+function createAnimal(index) {
+  return activeLevelId === "desert" ? createCamel(index) : createCow(index);
 }
 
 function createCow(index) {
@@ -1648,6 +2130,67 @@ function createCow(index) {
   return group;
 }
 
+function createCamel(index) {
+  const group = new THREE.Group();
+  const coat = new THREE.MeshStandardMaterial({
+    color: index % 2 === 0 ? 0xc89455 : 0xb98047,
+    emissive: 0x241005,
+    roughness: 0.86
+  });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.86 });
+  const saddle = new THREE.MeshStandardMaterial({ color: 0x7d2f35, roughness: 0.74 });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.82, 0.64), coat);
+  body.position.y = 1.05;
+  body.castShadow = true;
+
+  const hump = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.86, 4), coat);
+  hump.position.set(-0.28, 1.6, 0);
+  hump.rotation.y = Math.PI / 4;
+  hump.scale.z = 0.72;
+  hump.castShadow = true;
+
+  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.86, 4, 8), coat);
+  neck.position.set(0.98, 1.55, 0);
+  neck.rotation.z = -0.44;
+  neck.castShadow = true;
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.44, 0.42), coat);
+  head.position.set(1.38, 1.86, 0);
+  head.castShadow = true;
+
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.34), dark);
+  snout.position.set(1.74, 1.8, 0);
+
+  const saddleBlanket = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.09, 0.72), saddle);
+  saddleBlanket.position.set(-0.22, 1.5, 0);
+
+  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x061315 });
+  for (const z of [-0.13, 0.13]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), eyeMaterial);
+    eye.position.set(1.68, 1.94, z);
+    group.add(eye);
+  }
+
+  const legGeometry = new THREE.CapsuleGeometry(0.11, 0.68, 4, 8);
+  for (const x of [-0.64, 0.54]) {
+    for (const z of [-0.22, 0.22]) {
+      const leg = new THREE.Mesh(legGeometry, dark);
+      leg.position.set(x, 0.48, z);
+      leg.castShadow = true;
+      group.add(leg);
+    }
+  }
+
+  group.add(body, hump, neck, head, snout, saddleBlanket);
+  group.scale.setScalar(1.22);
+  return group;
+}
+
+function createHumanForLevel() {
+  return activeLevelId === "desert" ? createDesertHuman() : createBonusHuman();
+}
+
 function createBonusHuman() {
   const group = new THREE.Group();
   const pants = new THREE.MeshStandardMaterial({ color: 0x1e3d85, roughness: 0.78 });
@@ -1706,20 +2249,70 @@ function createBonusHuman() {
   return group;
 }
 
+function createDesertHuman() {
+  const group = new THREE.Group();
+  const robe = new THREE.MeshStandardMaterial({ color: 0xd6c28a, roughness: 0.82 });
+  const scarf = new THREE.MeshStandardMaterial({ color: 0x497a87, roughness: 0.74 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd99a6c, roughness: 0.68 });
+  const boots = new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.86 });
+
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.95, 5, 12), robe);
+  body.position.y = 1.08;
+  body.rotation.z = -0.12;
+  body.castShadow = true;
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), skin);
+  head.position.set(-0.08, 1.82, 0);
+  head.castShadow = true;
+
+  const turban = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.075, 8, 18), scarf);
+  turban.position.set(-0.08, 2.04, 0);
+  turban.rotation.x = Math.PI / 2;
+
+  const scarfTail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.52, 0.08), scarf);
+  scarfTail.position.set(-0.38, 1.78, -0.04);
+  scarfTail.rotation.z = 0.28;
+
+  const legGeometry = new THREE.CapsuleGeometry(0.11, 0.5, 4, 8);
+  [-0.14, 0.16].forEach((x, index) => {
+    const leg = new THREE.Mesh(legGeometry, boots);
+    leg.position.set(x, 0.34, 0);
+    leg.rotation.z = index === 0 ? 0.18 : -0.2;
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  const canteen = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.13, 0.13, 0.18, 10),
+    new THREE.MeshStandardMaterial({ color: 0x6a4d34, roughness: 0.7 })
+  );
+  canteen.position.set(0.52, 1.02, 0.12);
+  canteen.rotation.x = Math.PI / 2;
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.48, 14, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xff77dd,
+      transparent: true,
+      opacity: 0.24,
+      depthWrite: false
+    })
+  );
+  glow.position.set(0.02, 1.36, 0);
+
+  group.add(body, head, turban, scarfTail, canteen, glow);
+  group.scale.setScalar(1.2);
+  return group;
+}
+
 function spawnPowerups() {
-  [
-    [-62, 60],
-    [50, 36],
-    [69, -41],
-    [-22, -59],
-    [34, 6]
-  ].forEach(([x, z], index) => {
+  getActiveLevel().powerupSpots.forEach(([x, z], index) => {
     const safeSpot = findDrySpot(x, z, index + 120);
     const powerup = createEnergyCore();
     powerup.position.set(safeSpot.x, terrainHeight(safeSpot.x, safeSpot.z) + 1.15, safeSpot.z);
     powerup.userData = { collected: false, baseY: powerup.position.y };
     powerups.push(powerup);
-    scene.add(powerup);
+    addLevelObject(powerup);
   });
 }
 
@@ -1870,11 +2463,7 @@ function createEnergyCore() {
 }
 
 function spawnHazards() {
-  [
-    [24, 28, 17, 0.9],
-    [48, -34, 19, -0.82],
-    [-50, 35, 16, 1.05]
-  ].forEach(([x, z, radius, speed], index) => {
+  getActiveLevel().hazardSpots.forEach(([x, z, radius, speed], index) => {
     const hazard = createPatrolDrone(index);
     hazard.userData = {
       ...hazard.userData,
@@ -1885,7 +2474,7 @@ function spawnHazards() {
       warningRadius: 9.6
     };
     hazards.push(hazard);
-    scene.add(hazard);
+    addLevelObject(hazard);
   });
 }
 
@@ -2134,14 +2723,22 @@ function collectTarget(target) {
   score += points;
   beamEnergy = Math.min(100, beamEnergy + 18);
 
-  if (target.userData.type === "bonus") bonusCollected = true;
+  if (target.userData.type === "bonus") {
+    bonusCollected = true;
+    scoreBreakdown.humanBonusScore += points;
+    scoreBreakdown.humansCollectedTotal += 1;
+  } else if (target.userData.type === "animal") {
+    scoreBreakdown.animalScore += points;
+    scoreBreakdown.animalsCollectedTotal += 1;
+  }
   playCollectSound(target.userData.type === "bonus");
+  const level = getActiveLevel();
   flashMessage(
     target.userData.type === "bonus"
       ? `Bonus collected: +${points}`
-      : `Cow abducted: +${points}`
+      : `${capitalize(level.animalSingular)} abducted: +${points}`
   );
-  if (target.userData.type === "cow") {
+  if (target.userData.type === "animal") {
     waveCowsCollected += 1;
     totalCowsCollected += 1;
     if (waveCowsCollected >= waveCowGoal) completeWave(now);
@@ -2165,11 +2762,11 @@ function updateCollectibles(delta, elapsed) {
 
 function updateCollectibleMovement(item, delta, elapsed) {
   const type = item.userData.type;
-  if (type === "cow" && currentWaveIndex >= 1) {
+  if (type === "animal" && currentWaveIndex >= 1) {
     maybeScareCow(item, elapsed);
   }
 
-  if (currentWaveIndex >= 2 && (type === "cow" || type === "bonus")) {
+  if (currentWaveIndex >= 2 && (type === "animal" || type === "bonus")) {
     maybeStartIdleWander(item, elapsed);
   }
 
@@ -2222,7 +2819,7 @@ function maybeScareCow(cow, elapsed) {
   if (!target) return;
 
   cow.userData.moveTarget = target;
-  cow.userData.moveSpeed = 3.2 + Math.random() * 0.8;
+  cow.userData.moveSpeed = 4.35 + Math.random() * 0.95;
   cow.userData.moveUntil = elapsed + 3.2;
   cow.userData.scareCooldownUntil = elapsed + 7.5;
 }
@@ -2230,7 +2827,7 @@ function maybeScareCow(cow, elapsed) {
 function maybeStartIdleWander(item, elapsed) {
   if (waveTransitionActive || item.userData.moveTarget || elapsed < item.userData.wanderPauseUntil) return;
   const angle = Math.random() * Math.PI * 2;
-  const distance = item.userData.type === "cow" ? 3 + Math.random() * 4 : 2 + Math.random() * 3;
+  const distance = item.userData.type === "animal" ? 3.5 + Math.random() * 5 : 2.5 + Math.random() * 3.5;
   const target = findSafeMoveTarget(
     item.position.x,
     item.position.z,
@@ -2244,7 +2841,7 @@ function maybeStartIdleWander(item, elapsed) {
   }
 
   item.userData.moveTarget = target;
-  item.userData.moveSpeed = item.userData.type === "cow" ? 1.05 : 0.75;
+  item.userData.moveSpeed = item.userData.type === "animal" ? 1.65 : 1.15;
   item.userData.moveUntil = elapsed + 4.5;
 }
 
@@ -2275,7 +2872,7 @@ function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance) {
 
 function updateCowHint(elapsed) {
   const remainingCows = collectibles.filter(
-    (item) => item.userData.type === "cow" && item.userData.active !== false && !item.userData.collected
+    (item) => item.userData.type === "animal" && item.userData.active !== false && !item.userData.collected
   );
   const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
 
@@ -2306,6 +2903,8 @@ function updatePowerups(delta, elapsed, active = true) {
       powerup.userData.collected = true;
       powerup.visible = false;
       score += 50;
+      scoreBreakdown.boosterScore += 50;
+      scoreBreakdown.boostersCollectedTotal += 1;
       beamEnergy = Math.min(100, beamEnergy + 42);
       alertLevel = Math.max(0, alertLevel - 18);
       playPowerupSound();
@@ -2386,11 +2985,12 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
   comboNode.textContent = `Combo x${combo}`;
 
   targetCountNode.textContent = `Wave ${currentWaveIndex + 1} / ${waveConfigs.length}`;
-  bonusStatusNode.textContent = `Cows: ${waveCowsCollected} / ${waveCowGoal}`;
+  const level = getActiveLevel();
+  bonusStatusNode.textContent = `${capitalize(level.animalPlural)}: ${waveCowsCollected} / ${waveCowGoal}`;
 
-  if (alertLevel > 70) dangerStatusNode.textContent = "Farm alarm!";
+  if (alertLevel > 70) dangerStatusNode.textContent = level.alarmText;
   else if (alertLevel > 32) dangerStatusNode.textContent = "Patrol nearby";
-  else dangerStatusNode.textContent = bonusCollected ? "Bonus found" : "Rare bonus hidden";
+  else dangerStatusNode.textContent = bonusCollected ? "Bonus found" : level.calmText;
 
   const energyPercent = Math.round(beamEnergy);
   energyFillNode.style.transform = `scaleX(${beamEnergy / 100})`;
@@ -2401,6 +3001,7 @@ function completeWave(elapsed) {
   if (waveTransitionActive || gameWon) return;
   const completedWave = getCurrentWaveConfig();
   score += completedWave.bonus;
+  scoreBreakdown.waveBonusScore += completedWave.bonus;
   waveTransitionActive = true;
   beamActive = false;
   abductingTarget = null;
@@ -2423,11 +3024,11 @@ function completeWave(elapsed) {
   const nextWave = waveConfigs[currentWaveIndex + 1];
   const nextHint = nextWave.number === 3
     ? "Targets wander slowly now. Keep scanning."
-    : "Boost scares cows now. Keep your beam charged.";
+    : `Boost scares ${getActiveLevel().animalPlural} now. Keep your beam charged.`;
   waveTransitionTimers.push(window.setTimeout(() => {
     showWaveMessage(
       `WAVE ${nextWave.number} START`,
-      `COWS: 0 / ${nextWave.cowGoal}`,
+      `${getActiveLevel().animalPlural.toUpperCase()}: 0 / ${nextWave.cowGoal}`,
       nextHint
     );
   }, 1350));
@@ -2460,10 +3061,14 @@ function finishMission(elapsed) {
   gameWon = true;
   missionEndTime = elapsed;
   takeoffUntil = elapsed + 4.2;
-  score += Math.round(beamEnergy) * 4;
+  const energyBonus = Math.round(beamEnergy) * 4;
+  score += energyBonus;
+  scoreBreakdown.energyBonusScore += energyBonus;
   scoreNode.textContent = score.toLocaleString("en-US");
+  finalLevelNode.textContent = getActiveLevel().displayName;
   finalTimeNode.textContent = `Time: ${formatTime(missionEndTime - missionStartTime)}`;
   finalScoreNode.textContent = `Score: ${score.toLocaleString("en-US")}`;
+  updateFinalBreakdown();
   endScreenNode.classList.remove("hidden");
   flashMessage("Mission complete. All targets collected.");
   playTakeoffSound();
@@ -2475,6 +3080,24 @@ function formatTime(seconds) {
   const minutes = Math.floor(safeSeconds / 60);
   const rest = safeSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function updateFinalBreakdown() {
+  const totalBonus =
+    scoreBreakdown.boosterScore +
+    scoreBreakdown.humanBonusScore +
+    scoreBreakdown.waveBonusScore +
+    scoreBreakdown.energyBonusScore;
+  const level = getActiveLevel();
+  breakdownAnimalsNode.textContent = `${scoreBreakdown.animalScore.toLocaleString("en-US")} pts`;
+  breakdownBoostersNode.textContent = `${scoreBreakdown.boosterScore.toLocaleString("en-US")} pts`;
+  breakdownHumanNode.textContent = `${scoreBreakdown.humanBonusScore.toLocaleString("en-US")} pts`;
+  breakdownWavesNode.textContent = `${scoreBreakdown.waveBonusScore.toLocaleString("en-US")} pts`;
+  breakdownBonusNode.textContent = `${totalBonus.toLocaleString("en-US")} pts`;
+  breakdownStatsNode.textContent =
+    `${scoreBreakdown.animalsCollectedTotal} ${level.animalPlural}, ` +
+    `${scoreBreakdown.humansCollectedTotal} humans, ` +
+    `${scoreBreakdown.boostersCollectedTotal} diamonds, waves 3 / 3`;
 }
 
 function drawMinimap(elapsed) {
@@ -2505,7 +3128,7 @@ function drawMinimap(elapsed) {
   }
 
   const remainingCows = collectibles.filter(
-    (item) => item.userData.type === "cow" && item.userData.active !== false && !item.userData.collected
+    (item) => item.userData.type === "animal" && item.userData.active !== false && !item.userData.collected
   );
   const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
 
@@ -3030,6 +3653,10 @@ function flashMessage(text) {
 
 function horizontalDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
+}
+
+function capitalize(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
 
 function lerpAngle(current, target, amount) {

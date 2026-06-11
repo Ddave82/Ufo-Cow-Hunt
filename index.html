@@ -34,23 +34,42 @@
       <strong>UFO Cow Hunt</strong>
       <span>Fly with W/A/S/D or arrows. Hold Space to beam targets aboard.</span>
     </div>
-    <div id="start-screen" class="menu-panel panel" aria-live="polite">
+    <div id="level-screen" class="menu-panel panel" aria-live="polite">
       <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />
-      <div class="menu-kicker">Night farm abduction run</div>
+      <div class="menu-kicker">Choose mission zone</div>
       <strong>UFO Cow Hunt</strong>
-      <span class="menu-copy">Fly the UFO, abduct every cow, avoid search drones, and keep your beam charged with energy diamonds.</span>
+      <span class="menu-copy">Pick a hunting ground, confirm the level, then review the mission controls before launch.</span>
+      <div class="level-grid">
+        <button class="level-card selected" type="button" data-level="farm" aria-pressed="true">
+          <span>Farm / Cow Hunt</span>
+          <b>Farm Night</b>
+          <small>Moonlit fields, ponds, fences, cows, and patrol drones.</small>
+        </button>
+        <button class="level-card" type="button" data-level="desert" aria-pressed="false">
+          <span>Desert / Camel Hunt</span>
+          <b>Desert Hunt</b>
+          <small>Warm dunes, rocks, cacti, camels, and search drones.</small>
+        </button>
+      </div>
+      <button id="confirm-level-button" class="primary-button" type="button">Select This Level</button>
+    </div>
+    <div id="start-screen" class="menu-panel panel hidden" aria-live="polite">
+      <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />
+      <div id="start-kicker" class="menu-kicker">Night farm abduction run</div>
+      <strong>UFO Cow Hunt</strong>
+      <span id="start-copy" class="menu-copy">Fly the UFO, abduct every cow, avoid search drones, and keep your beam charged with energy diamonds.</span>
       <div class="menu-section-title">Flight Controls</div>
       <div class="controls-grid">
         <div class="control-card wide"><span>Move</span><b>WASD or Arrow Keys</b><small>W/Up thrusts, A/D or Left/Right turns, S/Down brakes.</small></div>
-        <div class="control-card"><span>Space</span><b>Hold to beam</b><small>Hover over cows or bonus targets.</small></div>
+        <div class="control-card"><span>Space</span><b>Hold to beam</b><small id="beam-tip">Hover over cows or bonus targets.</small></div>
         <div class="control-card"><span>Shift</span><b>Boost</b><small>Spend energy for speed.</small></div>
         <div class="control-card"><span>Esc</span><b>Settings</b><small>Open audio and menu controls.</small></div>
       </div>
       <div class="menu-section-title">Mission Basics</div>
       <div class="mission-tips">
-        <div><span>Cows</span><b>Beam them up for points.</b></div>
+        <div><span id="animal-tip-label">Cows</span><b id="animal-tip-copy">Beam them up for points.</b></div>
         <div><span>Energy diamonds</span><b>Collect them to refill beam energy.</b></div>
-        <div><span>Drones</span><b>They drain energy and raise the alarm.</b></div>
+        <div><span>Waves</span><b id="wave-tip-copy">Clear 10, then 15, then 20 cows.</b></div>
       </div>
       <button id="start-button" class="primary-button" type="button">Start Mission</button>
     </div>
@@ -79,10 +98,22 @@
       </div>
     </div>
     <div id="end-screen" class="panel hidden" aria-live="polite">
-      <strong>Mission Complete</strong>
+      <strong>Level Complete!</strong>
+      <span id="final-level">Farm Night</span>
       <span id="final-time">Time: 00:00</span>
       <span id="final-score">Score: 0</span>
-      <button id="main-menu-end-button" class="primary-button" type="button">Main Menu</button>
+      <div class="score-breakdown">
+        <div><span>Animals collected</span><b id="breakdown-animals">0 pts</b></div>
+        <div><span>Diamonds collected</span><b id="breakdown-boosters">0 pts</b></div>
+        <div><span>Human bonus</span><b id="breakdown-human">0 pts</b></div>
+        <div><span>Wave bonuses</span><b id="breakdown-waves">0 pts</b></div>
+        <div><span>Total bonus points</span><b id="breakdown-bonus">0 pts</b></div>
+        <div><span>Mission stats</span><b id="breakdown-stats">0 targets</b></div>
+      </div>
+      <div class="button-row">
+        <button id="play-again-button" class="primary-button" type="button">Play Again</button>
+        <button id="choose-level-button" class="primary-button secondary" type="button">Choose Another Level</button>
+      </div>
     </div>
   </body>
 </html>
