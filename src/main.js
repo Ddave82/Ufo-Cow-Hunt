@@ -1417,7 +1417,7 @@ function spawnCollectibles() {
 }
 
 function addCollectible(group, type, x, z, points) {
-  group.position.set(x, terrainHeight(x, z), z);
+  group.position.set(x, collectibleBaseHeight(type, x, z), z);
   group.rotation.y = Math.atan2(x, z) + Math.PI * 0.5;
   group.userData = {
     type,
@@ -1428,6 +1428,12 @@ function addCollectible(group, type, x, z, points) {
   };
   collectibles.push(group);
   scene.add(group);
+}
+
+function collectibleBaseHeight(type, x, z) {
+  if (type === "cow") return maxTerrainHeightAround(x, z, 1.45) + 0.12;
+  if (type === "bonus") return maxTerrainHeightAround(x, z, 0.8) + 0.08;
+  return terrainHeight(x, z);
 }
 
 function createCow(index) {
@@ -1650,11 +1656,32 @@ function isSpawnSafe(x, z) {
     [-sampleRadius * 0.7, -sampleRadius * 0.7]
   ];
 
-  return sampleOffsets.every(([offsetX, offsetZ]) => {
+  const heights = sampleOffsets.map(([offsetX, offsetZ]) => {
     const sampleX = x + offsetX;
     const sampleZ = z + offsetZ;
-    return !isWater(sampleX, sampleZ, 10) && terrainHeight(sampleX, sampleZ) > -0.72;
+    if (isWater(sampleX, sampleZ, 10)) return null;
+    return terrainHeight(sampleX, sampleZ);
   });
+
+  if (heights.some((height) => height === null || height <= -0.72)) return false;
+  const minHeight = Math.min(...heights);
+  const maxHeight = Math.max(...heights);
+  return maxHeight - minHeight < 1.15;
+}
+
+function maxTerrainHeightAround(x, z, radius) {
+  const diagonal = radius * 0.72;
+  return Math.max(
+    terrainHeight(x, z),
+    terrainHeight(x + radius, z),
+    terrainHeight(x - radius, z),
+    terrainHeight(x, z + radius),
+    terrainHeight(x, z - radius),
+    terrainHeight(x + diagonal, z + diagonal),
+    terrainHeight(x - diagonal, z + diagonal),
+    terrainHeight(x + diagonal, z - diagonal),
+    terrainHeight(x - diagonal, z - diagonal)
+  );
 }
 
 function createEnergyCore() {
