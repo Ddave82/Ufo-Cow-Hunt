@@ -77,6 +77,9 @@ const waterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
 ];
+const spawnBlockers = [
+  { x: 48, z: 48, rx: 14, rz: 12 }
+];
 const keys = new Set();
 const collectibles = [];
 const powerups = [];
@@ -1410,7 +1413,7 @@ function spawnCollectibles() {
     addCollectible(cow, "cow", safeSpot.x, safeSpot.z, 100);
   });
 
-  const bonusSpot = [[-66, 28], [36, 52], [63, -20], [-24, 60]][Math.floor(Math.random() * 4)];
+  const bonusSpot = [[-66, 28], [18, 63], [63, -20], [-24, 60]][Math.floor(Math.random() * 4)];
   const human = createBonusHuman();
   const safeBonusSpot = findDrySpot(bonusSpot[0], bonusSpot[1], 99);
   addCollectible(human, "bonus", safeBonusSpot.x, safeBonusSpot.z, 750);
@@ -1642,6 +1645,7 @@ function isDryObjectSpot(x, z, clearance = 4) {
 function isSpawnSafe(x, z) {
   if (Math.abs(x) > halfWorld - 8 || Math.abs(z) > halfWorld - 8) return false;
   if (isWater(x, z, 12)) return false;
+  if (!isClearOfSpawnBlockers(x, z, 4)) return false;
 
   const sampleRadius = 5.5;
   const sampleOffsets = [
@@ -1667,6 +1671,14 @@ function isSpawnSafe(x, z) {
   const minHeight = Math.min(...heights);
   const maxHeight = Math.max(...heights);
   return maxHeight - minHeight < 1.15;
+}
+
+function isClearOfSpawnBlockers(x, z, clearance = 0) {
+  return spawnBlockers.every((blocker) => {
+    const nx = Math.abs(x - blocker.x) / (blocker.rx + clearance);
+    const nz = Math.abs(z - blocker.z) / (blocker.rz + clearance);
+    return nx > 1 || nz > 1;
+  });
 }
 
 function maxTerrainHeightAround(x, z, radius) {
