@@ -38,7 +38,7 @@ const settingsMusicVolumeNode = document.querySelector("#settings-music-volume")
 const startMusicVolumeValueNode = document.querySelector("#start-music-volume-value");
 const settingsMusicVolumeValueNode = document.querySelector("#settings-music-volume-value");
 const musicEnabledNode = document.querySelector("#music-enabled");
-const restartButtonNode = document.querySelector("#restart-button");
+const mainMenuEndButtonNode = document.querySelector("#main-menu-end-button");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x030713);
@@ -184,7 +184,7 @@ window.addEventListener("keyup", (event) => {
   keys.delete(normalizeKey(event));
 });
 startButtonNode.addEventListener("click", startGame);
-restartButtonNode.addEventListener("click", () => window.location.reload());
+mainMenuEndButtonNode.addEventListener("click", returnToMainMenu);
 settingsToggleNode.addEventListener("click", () => {
   openSettings();
 });
@@ -286,7 +286,11 @@ function startGame() {
   messageNode.classList.add("hidden");
   initAudio();
   clock.getDelta();
-  flashMessage("Mission started");
+  showWaveMessage("WAVE 1 START", `COWS: 0 / ${waveConfigs[0].cowGoal}`, "Collect every cow to advance.");
+  waveTransitionTimers.push(window.setTimeout(() => {
+    messageNode.classList.add("hidden");
+    messageNode.classList.remove("wave-message");
+  }, 1700));
 }
 
 function returnToMainMenu() {
@@ -2198,7 +2202,7 @@ function updateCollectibleMovement(item, delta, elapsed) {
   item.position.x = nextX;
   item.position.z = nextZ;
   item.userData.baseY = collectibleBaseHeight(type, item.position.x, item.position.z);
-  item.rotation.y = Math.atan2(dx, dz) + Math.PI * 0.5;
+  item.rotation.y = Math.atan2(-dz, dx);
 }
 
 function maybeScareCow(cow, elapsed) {
