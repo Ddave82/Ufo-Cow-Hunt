@@ -1650,6 +1650,7 @@ function radarPoint(position, size, scale, clip = true) {
 function initAudio() {
   if (audio) {
     resumeAudioContext(audio.ctx);
+    playMusicTrack();
     return;
   }
 
@@ -1716,6 +1717,7 @@ function initAudio() {
   setupTakeoffSound();
   startAtmoLoop();
   resumeAudioContext(ctx);
+  playMusicTrack();
 }
 
 function resumeAudioContext(ctx) {
