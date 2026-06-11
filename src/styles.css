@@ -474,6 +474,38 @@ body {
   font-size: 0.9rem;
 }
 
+#message small {
+  color: #ffe7a0;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#message.wave-message {
+  top: 50%;
+  bottom: auto;
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px 24px;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(126, 255, 237, 0.18), transparent 62%),
+    rgba(4, 10, 25, 0.86);
+}
+
+#message.wave-message strong {
+  font-size: clamp(1.7rem, 5vw, 3rem);
+  color: #effcff;
+  text-shadow:
+    0 0 16px rgba(143, 255, 241, 0.72),
+    0 0 34px rgba(116, 199, 255, 0.32);
+}
+
+#message.wave-message span {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 #message.hidden {
   opacity: 0;
   transform: translate(-50%, 16px);

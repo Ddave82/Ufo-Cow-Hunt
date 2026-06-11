@@ -102,12 +102,19 @@ const powerups = [];
 const hazards = [];
 const waterSurfaces = [];
 const waterRipples = [];
+const waveConfigs = [
+  { number: 1, cowGoal: 10, bonus: 500 },
+  { number: 2, cowGoal: 15, bonus: 750 },
+  { number: 3, cowGoal: 20, bonus: 1000 }
+];
+const maxWaveCows = Math.max(...waveConfigs.map((wave) => wave.cowGoal));
 
 let score = 0;
 let combo = 1;
 let lastCollectTime = -Infinity;
 let firstMove = false;
 let beamActive = false;
+let boostActive = false;
 let beamLatchUntil = 0;
 let abductingTarget = null;
 let bonusCollected = false;
@@ -115,6 +122,12 @@ let beamEnergy = 100;
 let alertLevel = 0;
 let gameWon = false;
 let gameStarted = false;
+let currentWaveIndex = 0;
+let waveCowGoal = waveConfigs[0].cowGoal;
+let waveCowsCollected = 0;
+let totalCowsCollected = 0;
+let waveTransitionActive = false;
+let waveTransitionTimers = [];
 let soundMuted = false;
 let effectsVolume = 1;
 let musicVolume = 0.9;
@@ -264,6 +277,7 @@ function toggleSettings() {
 
 function startGame() {
   if (gameStarted || gameWon) return;
+  resetRunState();
   gameStarted = true;
   firstMove = true;
   missionStartTime = clock.elapsedTime;
@@ -276,10 +290,22 @@ function startGame() {
 }
 
 function returnToMainMenu() {
+  resetRunState();
   gameStarted = false;
-  gameWon = false;
   firstMove = false;
+  startScreenNode.classList.remove("hidden");
+  settingsPanelNode.classList.add("hidden");
+  endScreenNode.classList.add("hidden");
+  messageNode.classList.add("hidden");
+  updateHud(true, clock.elapsedTime);
+  clock.getDelta();
+}
+
+function resetRunState() {
+  clearWaveTransitionTimers();
+  gameWon = false;
   beamActive = false;
+  boostActive = false;
   beamLatchUntil = 0;
   abductingTarget = null;
   bonusCollected = false;
@@ -292,6 +318,9 @@ function returnToMainMenu() {
   missionEndTime = 0;
   takeoffUntil = 0;
   lastHudUpdate = 0;
+  currentWaveIndex = 0;
+  totalCowsCollected = 0;
+  waveTransitionActive = false;
   keys.clear();
   stopBeamSound();
   stopTakeoffSound();
@@ -307,23 +336,13 @@ function returnToMainMenu() {
   ufo.engineGlow.intensity = 5.2;
   beam.visible = false;
 
-  collectibles.forEach((item) => {
-    item.userData.collected = false;
-  });
-  randomizeCollectiblePositions();
+  prepareWave(0);
 
   powerups.forEach((item) => {
     item.userData.collected = false;
     item.visible = true;
     item.position.y = item.userData.baseY;
   });
-
-  startScreenNode.classList.remove("hidden");
-  settingsPanelNode.classList.add("hidden");
-  endScreenNode.classList.add("hidden");
-  messageNode.classList.add("hidden");
-  updateHud(true, clock.elapsedTime);
-  clock.getDelta();
 }
 
 function setVolume(value, preview = false) {
@@ -1403,7 +1422,7 @@ function createCowHint() {
 }
 
 function spawnCollectibles() {
-  const cowSpots = generateCowSpawnSpots();
+  const cowSpots = generateCowSpawnSpots(maxWaveCows);
 
   cowSpots.forEach(({ x, z }, index) => {
     const cow = createCow(index);
@@ -1418,6 +1437,7 @@ function spawnCollectibles() {
     fallbackSeed: 99
   });
   addCollectible(human, "bonus", bonusSpot.x, bonusSpot.z, 750);
+  prepareWave(0);
 }
 
 function addCollectible(group, type, x, z, points) {
@@ -1426,23 +1446,42 @@ function addCollectible(group, type, x, z, points) {
     type,
     points,
     collected: false,
+    active: true,
     wobble: Math.random() * Math.PI * 2,
-    baseY: group.position.y
+    baseY: group.position.y,
+    moveTarget: null,
+    moveSpeed: 0,
+    moveUntil: 0,
+    scareCooldownUntil: 0,
+    wanderPauseUntil: 0
   };
   collectibles.push(group);
   scene.add(group);
 }
 
-function randomizeCollectiblePositions() {
-  const cowSpots = generateCowSpawnSpots();
+function prepareWave(waveIndex) {
+  currentWaveIndex = THREE.MathUtils.clamp(waveIndex, 0, waveConfigs.length - 1);
+  const config = getCurrentWaveConfig();
+  waveCowGoal = config.cowGoal;
+  waveCowsCollected = 0;
+  bonusCollected = false;
+  abductingTarget = null;
+  beamActive = false;
+  beam.visible = false;
+
+  const cowSpots = generateCowSpawnSpots(waveCowGoal);
   let cowIndex = 0;
 
   collectibles.forEach((item) => {
     if (item.userData.type !== "cow") return;
-    const spot = cowSpots[cowIndex];
+    if (cowIndex < waveCowGoal) {
+      const spot = cowSpots[cowIndex];
+      positionCollectible(item, "cow", spot.x, spot.z);
+      resetCollectibleState(item, true);
+    } else {
+      resetCollectibleState(item, false);
+    }
     cowIndex += 1;
-    positionCollectible(item, "cow", spot.x, spot.z);
-    resetCollectibleState(item);
   });
 
   const bonusSpot = findRandomSpawnSpot({
@@ -1455,15 +1494,25 @@ function randomizeCollectiblePositions() {
   collectibles.forEach((item) => {
     if (item.userData.type !== "bonus") return;
     positionCollectible(item, "bonus", bonusSpot.x, bonusSpot.z);
-    resetCollectibleState(item);
+    resetCollectibleState(item, true);
   });
 }
 
-function resetCollectibleState(item) {
-  item.visible = true;
+function getCurrentWaveConfig() {
+  return waveConfigs[currentWaveIndex];
+}
+
+function resetCollectibleState(item, active = true) {
+  item.visible = active;
   item.rotation.z = 0;
-  item.userData.collected = false;
+  item.userData.active = active;
+  item.userData.collected = !active;
   item.userData.wobble = Math.random() * Math.PI * 2;
+  item.userData.moveTarget = null;
+  item.userData.moveSpeed = 0;
+  item.userData.moveUntil = 0;
+  item.userData.scareCooldownUntil = 0;
+  item.userData.wanderPauseUntil = clock.elapsedTime + 1 + Math.random() * 2.5;
 }
 
 function positionCollectible(group, type, x, z) {
@@ -1474,9 +1523,8 @@ function positionCollectible(group, type, x, z) {
   }
 }
 
-function generateCowSpawnSpots() {
+function generateCowSpawnSpots(cowCount = waveCowGoal) {
   const spots = [];
-  const cowCount = 15;
 
   for (let index = 0; index < cowCount; index += 1) {
     const zone = cowSpawnZones[index % cowSpawnZones.length];
@@ -1910,6 +1958,7 @@ function tick() {
   } else {
     beam.visible = false;
     beamActive = false;
+    boostActive = false;
     updateBeamSound(false);
     updatePowerups(delta, elapsed, false);
     updateHazards(delta, elapsed, false);
@@ -1918,7 +1967,7 @@ function tick() {
     ufo.rim.rotation.z += delta * 1.4;
   }
 
-  updateCollectibles(elapsed);
+  updateCollectibles(delta, elapsed);
   updateCowHint(elapsed);
   updateLandscape(elapsed);
   updateCamera(delta);
@@ -1940,6 +1989,7 @@ function updateUfo(delta, elapsed) {
     forwardInput > 0 &&
     (keys.has("ShiftLeft") || keys.has("ShiftRight")) &&
     beamEnergy > 14;
+  boostActive = boosting;
 
   if (turnInput !== 0) {
     const turnRate = boosting ? 1.25 : 1.65;
@@ -2008,7 +2058,7 @@ function updateTakeoff(delta, elapsed) {
 function updateBeam(delta, elapsed) {
   const wantsBeam = keys.has("Space") || performance.now() < beamLatchUntil;
   const hasBeamPower = beamEnergy > 2.5;
-  beamActive = wantsBeam && hasBeamPower;
+  beamActive = wantsBeam && hasBeamPower && !waveTransitionActive;
   beam.visible = beamActive;
 
   if (!beamActive) {
@@ -2046,12 +2096,13 @@ function updateBeam(delta, elapsed) {
 }
 
 function findBeamTarget() {
+  if (waveTransitionActive) return null;
   const ufoPos = ufo.group.position;
   let best = null;
   let bestDistance = Infinity;
 
   for (const item of collectibles) {
-    if (item.userData.collected) continue;
+    if (item.userData.collected || item.userData.active === false) continue;
     const dx = item.position.x - ufoPos.x;
     const dz = item.position.z - ufoPos.z;
     const horizontalDistance = Math.hypot(dx, dz);
@@ -2086,12 +2137,18 @@ function collectTarget(target) {
       ? `Bonus collected: +${points}`
       : `Cow abducted: +${points}`
   );
+  if (target.userData.type === "cow") {
+    waveCowsCollected += 1;
+    totalCowsCollected += 1;
+    if (waveCowsCollected >= waveCowGoal) completeWave(now);
+  }
   updateHud(true, now);
 }
 
-function updateCollectibles(elapsed) {
+function updateCollectibles(delta, elapsed) {
   collectibles.forEach((item, index) => {
-    if (item.userData.collected || item === abductingTarget) return;
+    if (item.userData.collected || item.userData.active === false || item === abductingTarget) return;
+    updateCollectibleMovement(item, delta, elapsed);
     item.position.y = item.userData.baseY + Math.sin(elapsed * 1.7 + item.userData.wobble) * 0.06;
     if (item.userData.type === "bonus") {
       item.rotation.y += 0.017;
@@ -2102,9 +2159,119 @@ function updateCollectibles(elapsed) {
   });
 }
 
+function updateCollectibleMovement(item, delta, elapsed) {
+  const type = item.userData.type;
+  if (type === "cow" && currentWaveIndex >= 1) {
+    maybeScareCow(item, elapsed);
+  }
+
+  if (currentWaveIndex >= 2 && (type === "cow" || type === "bonus")) {
+    maybeStartIdleWander(item, elapsed);
+  }
+
+  if (!item.userData.moveTarget) return;
+
+  const target = item.userData.moveTarget;
+  const dx = target.x - item.position.x;
+  const dz = target.z - item.position.z;
+  const distance = Math.hypot(dx, dz);
+
+  if (distance < 0.25 || elapsed > item.userData.moveUntil) {
+    item.position.x = target.x;
+    item.position.z = target.z;
+    item.userData.baseY = collectibleBaseHeight(type, item.position.x, item.position.z);
+    item.userData.moveTarget = null;
+    item.userData.moveSpeed = 0;
+    item.userData.wanderPauseUntil = elapsed + 2.4 + Math.random() * 4;
+    return;
+  }
+
+  const step = Math.min(distance, item.userData.moveSpeed * delta);
+  const nextX = item.position.x + (dx / distance) * step;
+  const nextZ = item.position.z + (dz / distance) * step;
+  if (!isSpawnSafe(nextX, nextZ)) {
+    item.userData.moveTarget = null;
+    item.userData.moveSpeed = 0;
+    item.userData.wanderPauseUntil = elapsed + 2.5 + Math.random() * 3;
+    return;
+  }
+  item.position.x = nextX;
+  item.position.z = nextZ;
+  item.userData.baseY = collectibleBaseHeight(type, item.position.x, item.position.z);
+  item.rotation.y = Math.atan2(dx, dz) + Math.PI * 0.5;
+}
+
+function maybeScareCow(cow, elapsed) {
+  if (!boostActive || waveTransitionActive || elapsed < cow.userData.scareCooldownUntil) return;
+  const distance = horizontalDistance(cow.position, ufo.group.position);
+  if (distance > 15 || distance < 0.1) return;
+
+  const awayX = cow.position.x - ufo.group.position.x;
+  const awayZ = cow.position.z - ufo.group.position.z;
+  const target = findSafeMoveTarget(
+    cow.position.x,
+    cow.position.z,
+    awayX,
+    awayZ,
+    9 + Math.random() * 5.5
+  );
+  if (!target) return;
+
+  cow.userData.moveTarget = target;
+  cow.userData.moveSpeed = 3.2 + Math.random() * 0.8;
+  cow.userData.moveUntil = elapsed + 3.2;
+  cow.userData.scareCooldownUntil = elapsed + 7.5;
+}
+
+function maybeStartIdleWander(item, elapsed) {
+  if (waveTransitionActive || item.userData.moveTarget || elapsed < item.userData.wanderPauseUntil) return;
+  const angle = Math.random() * Math.PI * 2;
+  const distance = item.userData.type === "cow" ? 3 + Math.random() * 4 : 2 + Math.random() * 3;
+  const target = findSafeMoveTarget(
+    item.position.x,
+    item.position.z,
+    Math.cos(angle),
+    Math.sin(angle),
+    distance
+  );
+  if (!target) {
+    item.userData.wanderPauseUntil = elapsed + 2.5;
+    return;
+  }
+
+  item.userData.moveTarget = target;
+  item.userData.moveSpeed = item.userData.type === "cow" ? 1.05 : 0.75;
+  item.userData.moveUntil = elapsed + 4.5;
+}
+
+function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance) {
+  const length = Math.hypot(dirX, dirZ) || 1;
+  const baseAngle = Math.atan2(dirZ / length, dirX / length);
+  const angleOffsets = [0, 0.45, -0.45, 0.9, -0.9, Math.PI];
+
+  for (const angleOffset of angleOffsets) {
+    const angle = baseAngle + angleOffset;
+    for (const factor of [1, 0.72, 0.48]) {
+      const targetX = THREE.MathUtils.clamp(
+        startX + Math.cos(angle) * distance * factor,
+        -halfWorld + 8,
+        halfWorld - 8
+      );
+      const targetZ = THREE.MathUtils.clamp(
+        startZ + Math.sin(angle) * distance * factor,
+        -halfWorld + 8,
+        halfWorld - 8
+      );
+      if (isSpawnSafe(targetX, targetZ)) return { x: targetX, z: targetZ };
+    }
+  }
+
+  return null;
+}
+
 function updateCowHint(elapsed) {
   const remainingCows = collectibles.filter(
-    (item) => item.userData.type === "cow" && !item.userData.collected
+    (item) => item.userData.type === "cow" && item.userData.active !== false && !item.userData.collected
   );
   const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
 
@@ -2214,32 +2381,78 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
   scoreNode.textContent = score.toLocaleString("en-US");
   comboNode.textContent = `Combo x${combo}`;
 
-  const cowsLeft = collectibles.filter(
-    (item) => item.userData.type === "cow" && !item.userData.collected
-  ).length;
-  targetCountNode.textContent = cowsLeft === 1 ? "1 cow left" : `${cowsLeft} cows left`;
-  bonusStatusNode.textContent = bonusCollected ? "Bonus found" : "Rare bonus: +750";
+  targetCountNode.textContent = `Wave ${currentWaveIndex + 1} / ${waveConfigs.length}`;
+  bonusStatusNode.textContent = `Cows: ${waveCowsCollected} / ${waveCowGoal}`;
 
   if (alertLevel > 70) dangerStatusNode.textContent = "Farm alarm!";
   else if (alertLevel > 32) dangerStatusNode.textContent = "Patrol nearby";
-  else dangerStatusNode.textContent = "Night calm";
+  else dangerStatusNode.textContent = bonusCollected ? "Bonus found" : "Rare bonus hidden";
 
   const energyPercent = Math.round(beamEnergy);
   energyFillNode.style.transform = `scaleX(${beamEnergy / 100})`;
   energyLabelNode.textContent = `${energyPercent}%`;
-
-  if (!gameWon && countRemainingMissionItems() === 0) {
-    finishMission(elapsed);
-  }
 }
 
-function countRemainingMissionItems() {
-  const remainingCollectibles = collectibles.filter((item) => !item.userData.collected).length;
-  const remainingPowerups = powerups.filter((item) => !item.userData.collected).length;
-  return remainingCollectibles + remainingPowerups;
+function completeWave(elapsed) {
+  if (waveTransitionActive || gameWon) return;
+  const completedWave = getCurrentWaveConfig();
+  score += completedWave.bonus;
+  waveTransitionActive = true;
+  beamActive = false;
+  abductingTarget = null;
+  beam.visible = false;
+  updateBeamSound(false);
+  updateHud(true, elapsed);
+  showWaveMessage(
+    `WAVE ${completedWave.number} COMPLETE`,
+    `SCORE: ${score.toLocaleString("en-US")}`,
+    `WAVE BONUS +${completedWave.bonus.toLocaleString("en-US")}`
+  );
+
+  if (currentWaveIndex >= waveConfigs.length - 1) {
+    waveTransitionTimers.push(window.setTimeout(() => {
+      finishMission(clock.elapsedTime);
+    }, 1800));
+    return;
+  }
+
+  const nextWave = waveConfigs[currentWaveIndex + 1];
+  const nextHint = nextWave.number === 3
+    ? "Targets wander slowly now. Keep scanning."
+    : "Boost scares cows now. Keep your beam charged.";
+  waveTransitionTimers.push(window.setTimeout(() => {
+    showWaveMessage(
+      `WAVE ${nextWave.number} START`,
+      `COWS: 0 / ${nextWave.cowGoal}`,
+      nextHint
+    );
+  }, 1350));
+  waveTransitionTimers.push(window.setTimeout(() => {
+    prepareWave(currentWaveIndex + 1);
+    waveTransitionActive = false;
+    messageNode.classList.add("hidden");
+    messageNode.classList.remove("wave-message");
+    updateHud(true, clock.elapsedTime);
+  }, 2600));
+}
+
+function showWaveMessage(title, lineOne, lineTwo = "") {
+  window.clearTimeout(flashMessage.timeout);
+  messageNode.classList.add("wave-message");
+  messageNode.classList.remove("hidden");
+  messageNode.innerHTML = `<strong>${title}</strong><span>${lineOne}</span>${lineTwo ? `<small>${lineTwo}</small>` : ""}`;
+}
+
+function clearWaveTransitionTimers() {
+  waveTransitionTimers.forEach((timer) => window.clearTimeout(timer));
+  waveTransitionTimers = [];
+  window.clearTimeout(flashMessage.timeout);
+  messageNode.classList.remove("wave-message");
 }
 
 function finishMission(elapsed) {
+  if (gameWon) return;
+  clearWaveTransitionTimers();
   gameWon = true;
   missionEndTime = elapsed;
   takeoffUntil = elapsed + 4.2;
@@ -2288,12 +2501,12 @@ function drawMinimap(elapsed) {
   }
 
   const remainingCows = collectibles.filter(
-    (item) => item.userData.type === "cow" && !item.userData.collected
+    (item) => item.userData.type === "cow" && item.userData.active !== false && !item.userData.collected
   );
   const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
 
   drawMapDots(collectibles, (item) => {
-    if (item.userData.collected) return null;
+    if (item.userData.collected || item.userData.active === false) return null;
     if (item.userData.type === "bonus") {
       const near = horizontalDistance(item.position, ufo.group.position) < 42;
       return near ? "#ff77dd" : "rgba(255, 119, 221, 0.28)";
@@ -2802,6 +3015,7 @@ function playNoiseBurst(duration = 0.12, volume = 0.02, delay = 0) {
 }
 
 function flashMessage(text) {
+  messageNode.classList.remove("wave-message");
   messageNode.classList.remove("hidden");
   messageNode.innerHTML = `<strong>${text}</strong><span>W/Up to thrust, A/D or arrows to turn, S/Down to brake, Space to beam.</span>`;
   window.clearTimeout(flashMessage.timeout);
