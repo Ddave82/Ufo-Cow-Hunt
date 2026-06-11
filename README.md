@@ -1,68 +1,68 @@
 # UFO Cow Hunt
 
-Ein kleines 3D-Browsergame mit Three.js: Fliege nachts mit einem UFO ueber eine Landschaft, suche Kuehe und sammle sie mit dem Lichtstrahl ein. Zwischen Mondlicht, Radar, Farm-Drohnen, Synth-Musik und Sci-Fi-Sounds geht es darum, alle Ziele moeglichst elegant einzusammeln.
+A small 3D browser game built with Three.js: fly a UFO across a moonlit farm landscape, find cows, and abduct them with your light beam. Between radar sweeps, farm drones, synth music, and sci-fi sound effects, the goal is to collect every target as smoothly as possible.
 
 ![UFO Cow Hunt](https://img.shields.io/badge/Three.js-3D%20Browsergame-79fff0)
 ![Vite](https://img.shields.io/badge/Vite-dev%20server-fff2a5)
 
-## Spielen
+## Play
 
-[UFO Cow Hunt auf GitHub Pages spielen](https://ddave82.github.io/Ufo-Cow-Hunt/)
+[Play UFO Cow Hunt on GitHub Pages](https://ddave82.github.io/Ufo-Cow-Hunt/)
 
-![Screenshot von UFO Cow Hunt](assets/screenshot.png)
+![Screenshot of UFO Cow Hunt](assets/screenshot.png)
 
 ## Gameplay
 
-Du steuerst ein UFO durch eine naechtliche Landschaft. Kuehe geben Punkte, ein seltener betrunkener Bonus-Mensch gibt Extra-Punkte, Energiekristalle laden den Beam wieder auf. Farm-Drohnen sind keine Instant-Death-Gegner, aber sie loesen Alarm aus und ziehen Beam-Energie.
+You control a UFO across a nighttime farm world. Cows give points, a rare drunk bonus human gives extra points, and energy crystals recharge your beam. Farm drones are not instant-death enemies, but they trigger alarms and drain beam energy.
 
-Wenn alles eingesammelt ist, endet die Runde: Das UFO startet in den Himmel, der Takeoff-Sound laeuft und deine Zeit plus Punkte werden angezeigt.
+Once everything has been collected, the round ends: the UFO blasts into the sky, the takeoff sound plays, and your final time and score are shown.
 
 ## Features
 
-- 3D-Landschaft mit Terrain, Wasser, Baeumen, Felsen, Wolken, Sternenhimmel und Mondlicht
-- UFO mit Metall-Details, Nieten, Glaskuppel und angedeutetem Alien
-- Lichtstrahl zum Einsammeln von Kuehen und Bonus-Zielen
-- Rotierendes Radar mit Zielen, Drohnen und Weltgrenze
-- Punktesystem mit Combo-Multiplikator
-- Beam-Energie, Boost und Energiekristalle
-- Farm-Drohnen mit Alarm- und Energie-Drain
-- Startmenue, Settings-Menue und Endscreen mit Restart
-- Getrennte Lautstaerke fuer UFO/Effekte und Musik
-- Musik-Playlist mit `music_1.mp3` und `music_2.mp3`
-- Atmosphaeren-Sound, Beam-Sound, Takeoff-Sound und Feedback-Sounds
+- Low-poly 3D landscape with terrain, water, trees, rocks, clouds, stars, and moonlight
+- Detailed UFO with metal rivets, glass dome, and a tiny alien inside
+- Light beam for abducting cows and bonus targets
+- Rotating radar with targets, drones, and world boundary
+- Score system with combo multiplier
+- Beam energy, boost, and rechargeable energy crystals
+- Farm drones with alarm and energy-drain behavior
+- Start menu, settings menu, and end screen with restart
+- Separate volume controls for UFO/effects and music
+- Music playlist using `music_1.mp3` and `music_2.mp3`
+- Ambient sound, beam sound, takeoff sound, and gameplay feedback sounds
 
-## Steuerung
+## Controls
 
-| Taste | Aktion |
+| Key | Action |
 | --- | --- |
-| `W` oder `Pfeil hoch` | Schub nach vorne |
-| `A` / `D` oder `Pfeil links` / `Pfeil rechts` | UFO drehen |
-| `S` oder `Pfeil runter` | Bremsen |
-| `Leertaste` | Lichtstrahl aktivieren |
+| `W` or `Arrow Up` | Thrust forward |
+| `A` / `D` or `Arrow Left` / `Arrow Right` | Turn the UFO |
+| `S` or `Arrow Down` | Brake |
+| `Space` | Activate the light beam |
 | `Shift` | Boost |
-| `Esc` | Einstellungen oeffnen/schliessen |
-| `M` | Sound stummschalten |
+| `Esc` | Open/close settings |
+| `M` | Mute sound |
 
-## Lokales Setup
+## Local Setup
 
-Voraussetzungen:
+Requirements:
 
 - Node.js
 - npm
 
-Installation:
+Install dependencies:
 
 ```bash
 npm install
 ```
 
-Dev-Server starten:
+Start the dev server:
 
 ```bash
 npm run dev
 ```
 
-Dann im Browser oeffnen:
+Then open the game in your browser:
 
 ```text
 http://127.0.0.1:5173/
@@ -74,28 +74,28 @@ http://127.0.0.1:5173/
 npm run build
 ```
 
-Preview des Production-Builds:
+Preview the production build:
 
 ```bash
 npm run preview
 ```
 
-## Sound-Dateien
+## Sound Files
 
-Die Musik und Effekte liegen lokal im Ordner `sounds/` und werden beim Build von Vite als Assets gebuendelt.
+Music and effects are stored locally in the `sounds/` folder and bundled as assets by Vite during the build.
 
-- `music_1.mp3` und `music_2.mp3`: Musik-Playlist im Loop
-- `atmo.mp3`: Atmosphaere, wird regelmaessig eingestreut
-- `beam.mp3`: Beam-Sound beim Hochbeamen
-- `takeoff.mp3`: Sound beim erfolgreichen Levelabschluss
-- `countdown.mp3`: vorbereitet fuer eine spaetere Rundenzeit-/Countdown-Mechanik
+- `music_1.mp3` and `music_2.mp3`: looping music playlist
+- `atmo.mp3`: ambient atmosphere, played at regular intervals
+- `beam.mp3`: beam sound while abducting targets
+- `takeoff.mp3`: sound for successful level completion
+- `countdown.mp3`: reserved for a future round timer/countdown mechanic
 
 ## Tech Stack
 
-- [Three.js](https://threejs.org/) fuer 3D-Rendering
-- [Vite](https://vite.dev/) fuer Dev-Server und Build
-- Web Audio API und HTML Audio fuer Synth-Sounds und MP3-Wiedergabe
+- [Three.js](https://threejs.org/) for 3D rendering
+- [Vite](https://vite.dev/) for the dev server and build pipeline
+- Web Audio API and HTML Audio for synth sounds and MP3 playback
 
 ## Status
 
-Spielbarer Prototyp. Die naechste groessere Idee ist eine Rundenzeit mit Countdown, sobald eine gute Balance zwischen entspanntem Erkunden und mehr Action gefunden ist.
+Playable prototype. The next larger idea is a round timer with a countdown once the right balance between relaxed exploration and extra action has been found.
