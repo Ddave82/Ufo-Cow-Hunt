@@ -37,26 +37,19 @@
     <div id="start-screen" class="menu-panel panel" aria-live="polite">
       <div class="menu-kicker">Night farm abduction run</div>
       <strong>UFO Cow Hunt</strong>
-      <span class="menu-copy">Find every cow, dodge the search drones, recharge your beam, and grab the rare bonus human if you spot him.</span>
+      <span class="menu-copy">Fly the UFO, abduct every cow, avoid search drones, and keep your beam charged with energy diamonds.</span>
+      <div class="menu-section-title">Flight Controls</div>
       <div class="controls-grid">
-        <div class="control-card"><span>W / Up</span><b>Thrust forward</b></div>
-        <div class="control-card"><span>A / D</span><b>Turn with your view</b></div>
-        <div class="control-card"><span>S / Down</span><b>Brake</b></div>
-        <div class="control-card"><span>Space</span><b>Abduction beam</b></div>
-        <div class="control-card"><span>Shift</span><b>Boost</b></div>
-        <div class="control-card"><span>Esc</span><b>Settings</b></div>
+        <div class="control-card wide"><span>Move</span><b>WASD or Arrow Keys</b><small>W/Up thrusts, A/D or Left/Right turns, S/Down brakes.</small></div>
+        <div class="control-card"><span>Space</span><b>Hold to beam</b><small>Hover over cows or bonus targets.</small></div>
+        <div class="control-card"><span>Shift</span><b>Boost</b><small>Spend energy for speed.</small></div>
+        <div class="control-card"><span>Esc</span><b>Settings</b><small>Open audio and menu controls.</small></div>
       </div>
-      <div class="audio-card">
-        <label class="volume-row">
-          <span>UFO & FX</span>
-          <input id="start-volume" type="range" min="0" max="100" value="100" />
-          <b id="start-volume-value">100%</b>
-        </label>
-        <label class="volume-row">
-          <span>Music</span>
-          <input id="start-music-volume" type="range" min="0" max="100" value="90" />
-          <b id="start-music-volume-value">90%</b>
-        </label>
+      <div class="menu-section-title">Mission Basics</div>
+      <div class="mission-tips">
+        <div><span>Cows</span><b>Beam them up for points.</b></div>
+        <div><span>Energy diamonds</span><b>Collect them to refill beam energy.</b></div>
+        <div><span>Drones</span><b>They drain energy and raise the alarm.</b></div>
       </div>
       <button id="start-button" class="primary-button" type="button">Start Mission</button>
     </div>

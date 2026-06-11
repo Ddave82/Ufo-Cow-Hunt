@@ -163,9 +163,9 @@ settingsCloseNode.addEventListener("click", () => {
   closeSettings();
 });
 mainMenuButtonNode.addEventListener("click", returnToMainMenu);
-startVolumeNode.addEventListener("input", () => setVolume(startVolumeNode.value, true));
+startVolumeNode?.addEventListener("input", () => setVolume(startVolumeNode.value, true));
 settingsVolumeNode.addEventListener("input", () => setVolume(settingsVolumeNode.value, true));
-startMusicVolumeNode.addEventListener("input", () => setMusicVolume(startMusicVolumeNode.value));
+startMusicVolumeNode?.addEventListener("input", () => setMusicVolume(startMusicVolumeNode.value));
 settingsMusicVolumeNode.addEventListener("input", () => setMusicVolume(settingsMusicVolumeNode.value));
 musicEnabledNode.addEventListener("change", () => {
   musicEnabled = musicEnabledNode.checked;
@@ -317,9 +317,9 @@ function setVolume(value, preview = false) {
   const label = `${Math.round(effectsVolume * 100)}%`;
   const sliderValue = String(Math.round(effectsVolume * 100));
 
-  startVolumeNode.value = sliderValue;
+  if (startVolumeNode) startVolumeNode.value = sliderValue;
   settingsVolumeNode.value = sliderValue;
-  startVolumeValueNode.textContent = label;
+  if (startVolumeValueNode) startVolumeValueNode.textContent = label;
   settingsVolumeValueNode.textContent = label;
   updateEffectsVolume();
   if (preview) playBeamPreviewSound();
@@ -330,9 +330,9 @@ function setMusicVolume(value) {
   const label = `${Math.round(musicVolume * 100)}%`;
   const sliderValue = String(Math.round(musicVolume * 100));
 
-  startMusicVolumeNode.value = sliderValue;
+  if (startMusicVolumeNode) startMusicVolumeNode.value = sliderValue;
   settingsMusicVolumeNode.value = sliderValue;
-  startMusicVolumeValueNode.textContent = label;
+  if (startMusicVolumeValueNode) startMusicVolumeValueNode.textContent = label;
   settingsMusicVolumeValueNode.textContent = label;
   updateMusicVolume();
 }
