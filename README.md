@@ -9,6 +9,8 @@ Ein kleines 3D-Browsergame mit Three.js: Fliege nachts mit einem UFO ueber eine 
 
 [UFO Cow Hunt auf GitHub Pages spielen](https://ddave82.github.io/Ufo-Cow-Hunt/)
 
+![Screenshot von UFO Cow Hunt](assets/screenshot.png)
+
 ## Gameplay
 
 Du steuerst ein UFO durch eine naechtliche Landschaft. Kuehe geben Punkte, ein seltener betrunkener Bonus-Mensch gibt Extra-Punkte, Energiekristalle laden den Beam wieder auf. Farm-Drohnen sind keine Instant-Death-Gegner, aber sie loesen Alarm aus und ziehen Beam-Energie.
