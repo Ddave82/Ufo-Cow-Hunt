@@ -1830,7 +1830,7 @@ function spawnHazards() {
       radius,
       speed,
       angle: index * 2.1,
-      warningRadius: 8.2
+      warningRadius: 9.6
     };
     hazards.push(hazard);
     scene.add(hazard);
@@ -2152,14 +2152,14 @@ function updateHazards(delta, elapsed, active = true) {
     data.angle += delta * data.speed;
     const x = data.center.x + Math.cos(data.angle) * data.radius;
     const z = data.center.z + Math.sin(data.angle) * data.radius;
-    hazard.position.set(x, terrainHeight(x, z) + 7 + Math.sin(elapsed * 2 + data.radius) * 0.35, z);
+    hazard.position.set(x, terrainHeight(x, z) + 10.2 + Math.sin(elapsed * 2 + data.radius) * 0.55, z);
     hazard.rotation.y = data.angle + Math.PI;
     if (data.scan) data.scan.scale.setScalar(0.92 + Math.sin(elapsed * 8 + data.radius) * 0.06);
     if (data.rotors) {
       for (const rotor of data.rotors) rotor.rotation.z += delta * 24;
     }
 
-    const distance = horizontalDistance(hazard.position, ufo.group.position);
+    const distance = hazard.position.distanceTo(ufo.group.position);
     if (active && distance < data.warningRadius) {
       detected = true;
       alertLevel = Math.min(100, alertLevel + delta * (beamActive ? 31 : 21));
