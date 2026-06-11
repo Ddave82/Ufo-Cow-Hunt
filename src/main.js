@@ -2196,10 +2196,14 @@ function updateAudio() {
   if (!audio) return;
   const now = audio.ctx.currentTime;
   const speed = ufoState.velocity.length();
+  const engineActive = gameStarted && !gameWon;
+  const takeoffActive = gameWon && clock.elapsedTime < takeoffUntil;
+  const engineLevel = engineActive ? 0.006 + speed * 0.0052 : takeoffActive ? 0.085 : 0;
+  const subLevel = engineActive ? 0.002 + speed * 0.0022 : takeoffActive ? 0.035 : 0;
   audio.engineOsc.frequency.setTargetAtTime(48 + speed * 4.2, now, 0.1);
   audio.engineSubOsc.frequency.setTargetAtTime(24 + speed * 1.45, now, 0.12);
-  audio.engineGain.gain.setTargetAtTime(0.038 + speed * 0.0048, now, 0.12);
-  audio.engineSubGain.gain.setTargetAtTime(0.023 + speed * 0.0021, now, 0.14);
+  audio.engineGain.gain.setTargetAtTime(engineLevel, now, 0.12);
+  audio.engineSubGain.gain.setTargetAtTime(subLevel, now, 0.14);
   updateBeamSound(beamActive);
 }
 
@@ -2477,9 +2481,9 @@ function initAudio() {
   engineFilter.type = "lowpass";
   engineFilter.frequency.value = 520;
   const engineGain = ctx.createGain();
-  engineGain.gain.value = 0.038;
+  engineGain.gain.value = 0;
   const engineSubGain = ctx.createGain();
-  engineSubGain.gain.value = 0.023;
+  engineSubGain.gain.value = 0;
   engineOsc.connect(engineFilter).connect(engineGain).connect(effectsGain);
   engineSubOsc.connect(engineSubGain).connect(effectsGain);
   engineOsc.start();
