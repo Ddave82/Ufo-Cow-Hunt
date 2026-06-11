@@ -1,5 +1,7 @@
 # UFO Cow Hunt
 
+![UFO Cow Hunt logo](assets/logo.png)
+
 A small 3D browser game built with Three.js: fly a UFO across a moonlit farm landscape, find cows, and abduct them with your light beam. Between radar sweeps, farm drones, synth music, and sci-fi sound effects, the goal is to collect every target as smoothly as possible.
 
 ![UFO Cow Hunt](https://img.shields.io/badge/Three.js-3D%20Browsergame-79fff0)
