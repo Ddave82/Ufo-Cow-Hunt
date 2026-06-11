@@ -137,6 +137,9 @@ scene.add(ufo.group);
 const beam = createBeam();
 ufo.group.add(beam);
 
+const cowHint = createCowHint();
+scene.add(cowHint);
+
 spawnCollectibles();
 spawnPowerups();
 spawnHazards();
@@ -1347,23 +1350,58 @@ function createBeam() {
   return group;
 }
 
+function createCowHint() {
+  const group = new THREE.Group();
+  group.visible = false;
+
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffec7a,
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false
+  });
+
+  const outerRing = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.045, 8, 36), ringMaterial);
+  outerRing.rotation.x = Math.PI / 2;
+
+  const innerRing = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.035, 8, 30), ringMaterial);
+  innerRing.rotation.x = Math.PI / 2;
+
+  const spark = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.28, 0),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff8b2,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false
+    })
+  );
+  spark.position.y = 0.55;
+
+  const light = new THREE.PointLight(0xffdf6b, 0.75, 7);
+  light.position.y = 0.35;
+
+  group.add(outerRing, innerRing, spark, light);
+  return group;
+}
+
 function spawnCollectibles() {
   const cowSpots = [
     [18, 22],
-    [31, 18],
-    [-55, 35],
-    [-48, 24],
+    [34, 14],
+    [-54, 34],
+    [-38, 20],
     [42, -30],
-    [57, -24],
-    [-6, 55],
-    [8, 48],
-    [-70, 8],
-    [-66, 62],
-    [66, 33],
-    [73, -49],
-    [-31, -62],
-    [14, -66],
-    [2, 6]
+    [58, -22],
+    [-8, 55],
+    [9, 47],
+    [-62, 4],
+    [-55, 61],
+    [66, 31],
+    [65, -45],
+    [-30, -55],
+    [18, -58],
+    [4, 6]
   ];
 
   cowSpots.forEach(([x, z], index) => {
@@ -1753,6 +1791,7 @@ function tick() {
   }
 
   updateCollectibles(elapsed);
+  updateCowHint(elapsed);
   updateLandscape(elapsed);
   updateCamera(delta);
   updateAudio();
@@ -1935,6 +1974,28 @@ function updateCollectibles(elapsed) {
   });
 }
 
+function updateCowHint(elapsed) {
+  const remainingCows = collectibles.filter(
+    (item) => item.userData.type === "cow" && !item.userData.collected
+  );
+  const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
+
+  if (!lastCow || lastCow === abductingTarget) {
+    cowHint.visible = false;
+    return;
+  }
+
+  cowHint.visible = true;
+  cowHint.position.set(
+    lastCow.position.x,
+    lastCow.userData.baseY + 3.65 + Math.sin(elapsed * 3.2) * 0.28,
+    lastCow.position.z
+  );
+  cowHint.rotation.y = elapsed * 1.8;
+  cowHint.children[1].rotation.z = -elapsed * 2.4;
+  cowHint.scale.setScalar(0.9 + Math.sin(elapsed * 5.5) * 0.08);
+}
+
 function updatePowerups(delta, elapsed, active = true) {
   for (const powerup of powerups) {
     if (powerup.userData.collected) continue;
@@ -2094,14 +2155,35 @@ function drawMinimap(elapsed) {
     minimap.stroke();
   }
 
+  const remainingCows = collectibles.filter(
+    (item) => item.userData.type === "cow" && !item.userData.collected
+  );
+  const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
+
   drawMapDots(collectibles, (item) => {
     if (item.userData.collected) return null;
     if (item.userData.type === "bonus") {
       const near = horizontalDistance(item.position, ufo.group.position) < 42;
       return near ? "#ff77dd" : "rgba(255, 119, 221, 0.28)";
     }
+    if (item === lastCow) return null;
     return "#fff1a5";
   }, size, scale, 2.4);
+
+  if (lastCow) {
+    const point = radarPoint(lastCow.position, size, scale);
+    if (point) {
+      const pulse = 5.4 + Math.sin(elapsed * 5.8) * 1.2;
+      minimap.beginPath();
+      minimap.arc(point.x, point.y, pulse, 0, Math.PI * 2);
+      minimap.fillStyle = "rgba(255, 232, 107, 0.24)";
+      minimap.fill();
+      minimap.beginPath();
+      minimap.arc(point.x, point.y, 3.2, 0, Math.PI * 2);
+      minimap.fillStyle = "#ffe86b";
+      minimap.fill();
+    }
+  }
 
   drawMapDots(powerups, (item) => (item.userData.collected ? null : "#79fff0"), size, scale, 2.8);
   drawMapDots(hazards, () => "#ff4b68", size, scale, 3);
