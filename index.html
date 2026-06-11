@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,17 +8,17 @@
   </head>
   <body>
     <canvas id="game"></canvas>
-    <button id="settings-toggle" class="icon-button" type="button" aria-label="Einstellungen">Einstellungen</button>
+    <button id="settings-toggle" class="icon-button" type="button" aria-label="Settings">Settings</button>
     <div id="hud" aria-live="polite">
       <div class="score panel">
-        <span>Punkte</span>
+        <span>Score</span>
         <strong id="score">0</strong>
         <small id="combo">Combo x1</small>
       </div>
       <div class="status panel">
-        <span id="target-count">0 Kuehe uebrig</span>
-        <span id="bonus-status">Bonus versteckt</span>
-        <span id="danger-status">Nacht ruhig</span>
+        <span id="target-count">0 cows left</span>
+        <span id="bonus-status">Bonus hidden</span>
+        <span id="danger-status">Night calm</span>
       </div>
     </div>
     <div id="radar" class="panel" aria-label="Minimap">
@@ -26,61 +26,69 @@
       <div class="radar-label">Radar</div>
     </div>
     <div id="energy" class="panel">
-      <span>Beam-Energie</span>
+      <span>Beam Energy</span>
       <div class="meter"><i id="energy-fill"></i></div>
       <small id="energy-label">100%</small>
     </div>
     <div id="message">
       <strong>UFO Cow Hunt</strong>
-      <span>W/Pfeil hoch gibt Schub, A/D oder Pfeile drehen, S bremst, Leertaste beamt.</span>
+      <span>Fly with W/A/S/D or arrows. Hold Space to beam targets aboard.</span>
     </div>
     <div id="start-screen" class="menu-panel panel" aria-live="polite">
+      <div class="menu-kicker">Night farm abduction run</div>
       <strong>UFO Cow Hunt</strong>
-      <span>Kuehe suchen, mit dem Lichtstrahl einsammeln und den Farm-Suchdrohnen ausweichen. Drohnen zerstoeren dich nicht, aber sie loesen Alarm aus und ziehen Beam-Energie.</span>
+      <span class="menu-copy">Find every cow, dodge the search drones, recharge your beam, and grab the rare bonus human if you spot him.</span>
       <div class="controls-grid">
-        <span>W / Hoch</span><b>Schub nach vorne</b>
-        <span>A / D</span><b>UFO drehen</b>
-        <span>S / Runter</span><b>Bremsen</b>
-        <span>Leertaste</span><b>Lichtstrahl</b>
-        <span>Shift</span><b>Boost</b>
-        <span>Esc</span><b>Einstellungen</b>
+        <div class="control-card"><span>W / Up</span><b>Thrust forward</b></div>
+        <div class="control-card"><span>A / D</span><b>Turn with your view</b></div>
+        <div class="control-card"><span>S / Down</span><b>Brake</b></div>
+        <div class="control-card"><span>Space</span><b>Abduction beam</b></div>
+        <div class="control-card"><span>Shift</span><b>Boost</b></div>
+        <div class="control-card"><span>Esc</span><b>Settings</b></div>
       </div>
-      <label class="volume-row">
-        <span>UFO & Effekte</span>
-        <input id="start-volume" type="range" min="0" max="100" value="100" />
-        <b id="start-volume-value">100%</b>
-      </label>
-      <label class="volume-row">
-        <span>Musik</span>
-        <input id="start-music-volume" type="range" min="0" max="100" value="90" />
-        <b id="start-music-volume-value">90%</b>
-      </label>
-      <button id="start-button" class="primary-button" type="button">Mission starten</button>
+      <div class="audio-card">
+        <label class="volume-row">
+          <span>UFO & FX</span>
+          <input id="start-volume" type="range" min="0" max="100" value="100" />
+          <b id="start-volume-value">100%</b>
+        </label>
+        <label class="volume-row">
+          <span>Music</span>
+          <input id="start-music-volume" type="range" min="0" max="100" value="90" />
+          <b id="start-music-volume-value">90%</b>
+        </label>
+      </div>
+      <button id="start-button" class="primary-button" type="button">Start Mission</button>
     </div>
     <div id="settings-panel" class="menu-panel panel hidden" aria-live="polite">
-      <strong>Einstellungen</strong>
-      <label class="volume-row">
-        <span>UFO & Effekte</span>
-        <input id="settings-volume" type="range" min="0" max="100" value="100" />
-        <b id="settings-volume-value">100%</b>
-      </label>
-      <label class="volume-row">
-        <span>Musik</span>
-        <input id="settings-music-volume" type="range" min="0" max="100" value="90" />
-        <b id="settings-music-volume-value">90%</b>
-      </label>
-      <label class="toggle-row">
-        <input id="music-enabled" type="checkbox" checked />
-        <span>Musik eingeschaltet</span>
-      </label>
-      <button id="main-menu-button" class="primary-button secondary" type="button">Hauptmenue</button>
-      <button id="settings-close" class="primary-button secondary" type="button">Zurueck</button>
+      <div class="menu-kicker">Ship systems</div>
+      <strong>Settings</strong>
+      <div class="audio-card">
+        <label class="volume-row">
+          <span>UFO & FX</span>
+          <input id="settings-volume" type="range" min="0" max="100" value="100" />
+          <b id="settings-volume-value">100%</b>
+        </label>
+        <label class="volume-row">
+          <span>Music</span>
+          <input id="settings-music-volume" type="range" min="0" max="100" value="90" />
+          <b id="settings-music-volume-value">90%</b>
+        </label>
+        <label class="toggle-row">
+          <input id="music-enabled" type="checkbox" checked />
+          <span>Music enabled</span>
+        </label>
+      </div>
+      <div class="button-row">
+        <button id="main-menu-button" class="primary-button secondary" type="button">Main Menu</button>
+        <button id="settings-close" class="primary-button secondary" type="button">Back</button>
+      </div>
     </div>
     <div id="end-screen" class="panel hidden" aria-live="polite">
-      <strong>Mission abgeschlossen</strong>
-      <span id="final-time">Zeit: 00:00</span>
-      <span id="final-score">Punkte: 0</span>
-      <button id="restart-button" class="primary-button" type="button">Neu starten</button>
+      <strong>Mission Complete</strong>
+      <span id="final-time">Time: 00:00</span>
+      <span id="final-score">Score: 0</span>
+      <button id="restart-button" class="primary-button" type="button">Restart</button>
     </div>
   </body>
 </html>

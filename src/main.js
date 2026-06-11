@@ -200,7 +200,7 @@ function onKeyDown(event) {
   if (key === "KeyM" && !event.repeat) {
     soundMuted = !soundMuted;
     updateMasterVolume();
-    flashMessage(soundMuted ? "Sound aus" : "Sound an");
+    flashMessage(soundMuted ? "Sound muted" : "Sound on");
   }
 
   if (key === "Escape" && !event.repeat) {
@@ -253,7 +253,7 @@ function startGame() {
   messageNode.classList.add("hidden");
   initAudio();
   clock.getDelta();
-  flashMessage("Mission gestartet");
+  flashMessage("Mission started");
 }
 
 function returnToMainMenu() {
@@ -1982,8 +1982,8 @@ function collectTarget(target) {
   playCollectSound(target.userData.type === "bonus");
   flashMessage(
     target.userData.type === "bonus"
-      ? `Bonus eingesammelt: +${points}`
-      : `Kuh eingesammelt: +${points}`
+      ? `Bonus collected: +${points}`
+      : `Cow abducted: +${points}`
   );
   updateHud(true, now);
 }
@@ -2037,7 +2037,7 @@ function updatePowerups(delta, elapsed, active = true) {
       beamEnergy = Math.min(100, beamEnergy + 42);
       alertLevel = Math.max(0, alertLevel - 18);
       playPowerupSound();
-      flashMessage("Energiekern: +50, Beam aufgeladen");
+      flashMessage("Energy core: +50, beam recharged");
       updateHud(true, elapsed);
     }
   }
@@ -2106,18 +2106,18 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
   if (!force && elapsed - lastHudUpdate < 0.12) return;
   lastHudUpdate = elapsed;
 
-  scoreNode.textContent = score.toLocaleString("de-DE");
+  scoreNode.textContent = score.toLocaleString("en-US");
   comboNode.textContent = `Combo x${combo}`;
 
   const cowsLeft = collectibles.filter(
     (item) => item.userData.type === "cow" && !item.userData.collected
   ).length;
-  targetCountNode.textContent = cowsLeft === 1 ? "1 Kuh uebrig" : `${cowsLeft} Kuehe uebrig`;
-  bonusStatusNode.textContent = bonusCollected ? "Bonus gefunden" : "Seltener Bonus: +750";
+  targetCountNode.textContent = cowsLeft === 1 ? "1 cow left" : `${cowsLeft} cows left`;
+  bonusStatusNode.textContent = bonusCollected ? "Bonus found" : "Rare bonus: +750";
 
-  if (alertLevel > 70) dangerStatusNode.textContent = "Farmalarm!";
-  else if (alertLevel > 32) dangerStatusNode.textContent = "Patrouille nah";
-  else dangerStatusNode.textContent = "Nacht ruhig";
+  if (alertLevel > 70) dangerStatusNode.textContent = "Farm alarm!";
+  else if (alertLevel > 32) dangerStatusNode.textContent = "Patrol nearby";
+  else dangerStatusNode.textContent = "Night calm";
 
   const energyPercent = Math.round(beamEnergy);
   energyFillNode.style.transform = `scaleX(${beamEnergy / 100})`;
@@ -2139,11 +2139,11 @@ function finishMission(elapsed) {
   missionEndTime = elapsed;
   takeoffUntil = elapsed + 4.2;
   score += Math.round(beamEnergy) * 4;
-  scoreNode.textContent = score.toLocaleString("de-DE");
-  finalTimeNode.textContent = `Zeit: ${formatTime(missionEndTime - missionStartTime)}`;
-  finalScoreNode.textContent = `Punkte: ${score.toLocaleString("de-DE")}`;
+  scoreNode.textContent = score.toLocaleString("en-US");
+  finalTimeNode.textContent = `Time: ${formatTime(missionEndTime - missionStartTime)}`;
+  finalScoreNode.textContent = `Score: ${score.toLocaleString("en-US")}`;
   endScreenNode.classList.remove("hidden");
-  flashMessage("Mission abgeschlossen. Alle Ziele eingesammelt.");
+  flashMessage("Mission complete. All targets collected.");
   playTakeoffSound();
   playBonusJingle();
 }
@@ -2698,7 +2698,7 @@ function playNoiseBurst(duration = 0.12, volume = 0.02, delay = 0) {
 
 function flashMessage(text) {
   messageNode.classList.remove("hidden");
-  messageNode.innerHTML = `<strong>${text}</strong><span>W/Pfeil hoch gibt Schub, A/D oder Pfeile drehen, S bremst, Leertaste beamt.</span>`;
+  messageNode.innerHTML = `<strong>${text}</strong><span>W/Up to thrust, A/D or arrows to turn, S/Down to brake, Space to beam.</span>`;
   window.clearTimeout(flashMessage.timeout);
   flashMessage.timeout = window.setTimeout(() => {
     if (firstMove) messageNode.classList.add("hidden");
