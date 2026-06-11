@@ -85,7 +85,6 @@ let lastCollectTime = -Infinity;
 let firstMove = false;
 let beamActive = false;
 let beamLatchUntil = 0;
-let beamPreviewUntil = 0;
 let abductingTarget = null;
 let bonusCollected = false;
 let beamEnergy = 100;
@@ -102,6 +101,7 @@ let atmoTimer = null;
 let musicAudio = null;
 let musicTrackIndex = 0;
 let beamAudio = null;
+let beamPreviewAudio = null;
 let takeoffAudio = null;
 let lastAlertSound = 0;
 let lastNoPowerFeedback = -Infinity;
@@ -254,7 +254,6 @@ function returnToMainMenu() {
   firstMove = false;
   beamActive = false;
   beamLatchUntil = 0;
-  beamPreviewUntil = 0;
   abductingTarget = null;
   bonusCollected = false;
   score = 0;
@@ -1472,12 +1471,11 @@ function updateAudio() {
   if (!audio) return;
   const now = audio.ctx.currentTime;
   const speed = ufoState.velocity.length();
-  const beamAudible = beamActive || clock.elapsedTime < beamPreviewUntil;
   audio.engineOsc.frequency.setTargetAtTime(48 + speed * 4.2, now, 0.1);
   audio.engineSubOsc.frequency.setTargetAtTime(24 + speed * 1.45, now, 0.12);
   audio.engineGain.gain.setTargetAtTime(0.038 + speed * 0.0048, now, 0.12);
   audio.engineSubGain.gain.setTargetAtTime(0.023 + speed * 0.0021, now, 0.14);
-  updateBeamSound(beamAudible);
+  updateBeamSound(beamActive);
 }
 
 function updateHud(force = false, elapsed = clock.elapsedTime) {
@@ -1818,16 +1816,22 @@ function playAtmoSound() {
 }
 
 function setupBeamSound() {
-  if (beamAudio) return;
-  beamAudio = new Audio(beamSoundUrl);
-  beamAudio.preload = "auto";
-  beamAudio.loop = true;
+  if (!beamAudio) {
+    beamAudio = new Audio(beamSoundUrl);
+    beamAudio.preload = "auto";
+    beamAudio.loop = true;
+  }
+  if (!beamPreviewAudio) {
+    beamPreviewAudio = new Audio(beamSoundUrl);
+    beamPreviewAudio.preload = "auto";
+  }
   updateBeamVolume();
 }
 
 function updateBeamVolume() {
-  if (!beamAudio) return;
-  beamAudio.volume = soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 0.95, 0, 1);
+  const volume = soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 0.95, 0, 1);
+  if (beamAudio) beamAudio.volume = volume;
+  if (beamPreviewAudio) beamPreviewAudio.volume = volume;
 }
 
 function updateBeamSound(active) {
@@ -1928,7 +1932,14 @@ function playNoPowerSound() {
 
 function playBeamPreviewSound() {
   initAudio();
-  beamPreviewUntil = clock.elapsedTime + 0.42;
+  setupBeamSound();
+  if (!beamPreviewAudio || soundMuted) return;
+  updateBeamVolume();
+  beamPreviewAudio.pause();
+  beamPreviewAudio.currentTime = 0;
+  beamPreviewAudio.play().catch(() => {
+    // The slider input is a user gesture in normal browsers; ignore blocked autoplay fallbacks.
+  });
 }
 
 function playBonusJingle() {
