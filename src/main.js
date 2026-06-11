@@ -73,11 +73,16 @@ const tempVector2 = new THREE.Vector3();
 const worldSize = 170;
 const halfWorld = worldSize / 2;
 const terrainSegments = 88;
-const waterBody = { x: -36, z: -34, rx: 26.4, rz: 12.3 };
+const waterBodies = [
+  { x: -36, z: -34, rx: 26.4, rz: 12.3 },
+  { x: 38, z: -57, rx: 14.5, rz: 8.2 }
+];
 const keys = new Set();
 const collectibles = [];
 const powerups = [];
 const hazards = [];
+const waterSurfaces = [];
+const waterRipples = [];
 
 let score = 0;
 let combo = 1;
@@ -355,8 +360,18 @@ function createTerrain() {
     positions.setY(i, height);
 
     const ridge = ridgeAmount(x, z);
-    const meadow = 0.17 + height * 0.012;
-    color.setHSL(0.25 + Math.sin(x * 0.04) * 0.025, 0.5, meadow);
+    const shore = shoreAmount(x, z);
+    const path = pathAmount(x, z);
+    const pasture = pastureAmount(x, z);
+    const meadow =
+      0.18 +
+      height * 0.012 +
+      Math.sin(x * 0.16 + z * 0.06) * 0.012 +
+      Math.cos(x * 0.08 - z * 0.13) * 0.01;
+    color.setHSL(0.25 + Math.sin(x * 0.04) * 0.025, 0.52, meadow);
+    if (pasture > 0.35) color.setHSL(0.28, 0.48, 0.2 + pasture * 0.045);
+    if (path > 0.3) color.setHSL(0.1, 0.34, 0.19 + path * 0.045);
+    if (shore > 0.08) color.setHSL(0.13, 0.28, 0.16 + shore * 0.075);
     if (ridge > 0.42) color.setHSL(0.16, 0.34, 0.18 + ridge * 0.1);
     if (height > 5.4) color.setHSL(0.12, 0.3, 0.32 + height * 0.006);
     if (height < -1.15) color.setHSL(0.52, 0.5, 0.16);
@@ -379,6 +394,7 @@ function createTerrain() {
 
 function terrainHeight(x, z) {
   const lakeSink = isWater(x, z) ? -1.45 : 0;
+  const shoreLift = shoreAmount(x, z) * 0.42;
   const ridge =
     Math.max(0, 1 - Math.abs(x * 0.034 + z * 0.016 - 0.7)) * 2.4 +
     Math.max(0, 1 - Math.abs(x * -0.02 + z * 0.038 + 1.2)) * 1.8;
@@ -389,6 +405,7 @@ function terrainHeight(x, z) {
     Math.cos((x - z) * 0.028) * 1.2 +
     Math.sin(x * 0.19 + z * 0.07) * 0.65 +
     ridge +
+    shoreLift +
     lakeSink
   );
 }
@@ -402,9 +419,54 @@ function ridgeAmount(x, z) {
 }
 
 function isWater(x, z, padding = 0) {
-  const nx = (x - waterBody.x) / (waterBody.rx + padding);
-  const nz = (z - waterBody.z) / (waterBody.rz + padding);
-  return nx * nx + nz * nz < 1;
+  return waterBodies.some((body) => {
+    const nx = (x - body.x) / (body.rx + padding);
+    const nz = (z - body.z) / (body.rz + padding);
+    return nx * nx + nz * nz < 1;
+  });
+}
+
+function shoreAmount(x, z) {
+  return waterBodies.reduce((amount, body) => {
+    const nx = (x - body.x) / body.rx;
+    const nz = (z - body.z) / body.rz;
+    const distance = Math.sqrt(nx * nx + nz * nz);
+    const ring = 1 - Math.min(Math.abs(distance - 1) / 0.34, 1);
+    return Math.max(amount, ring);
+  }, 0);
+}
+
+function pathAmount(x, z) {
+  return Math.max(
+    0,
+    1 - distanceToSegment(x, z, -78, 60, -38, 38) / 5.4,
+    1 - distanceToSegment(x, z, -38, 38, 12, 28) / 4.2,
+    1 - distanceToSegment(x, z, 12, 28, 48, 44) / 4.8,
+    1 - distanceToSegment(x, z, 12, 28, 30, -20) / 3.8
+  );
+}
+
+function pastureAmount(x, z) {
+  return Math.max(
+    softRectAmount(x, z, 22, 27, 34, 25),
+    softRectAmount(x, z, -48, 36, 32, 28),
+    softRectAmount(x, z, 48, -34, 34, 27),
+    softRectAmount(x, z, -2, 54, 28, 18)
+  );
+}
+
+function softRectAmount(x, z, centerX, centerZ, width, depth) {
+  const edge = Math.max(Math.abs(x - centerX) / (width * 0.5), Math.abs(z - centerZ) / (depth * 0.5));
+  return THREE.MathUtils.clamp(1 - (edge - 0.72) / 0.38, 0, 1);
+}
+
+function distanceToSegment(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lengthSq = dx * dx + dz * dz;
+  if (lengthSq === 0) return Math.hypot(px - ax, pz - az);
+  const t = THREE.MathUtils.clamp(((px - ax) * dx + (pz - az) * dz) / lengthSq, 0, 1);
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
 }
 
 function addNightSky() {
@@ -473,6 +535,7 @@ function addLights() {
 function addLandscapeDetails() {
   addWater();
   addBoundaryFence();
+  addFarmDetails();
   addTrees();
   addRocks();
   addCropCircles();
@@ -481,23 +544,67 @@ function addLandscapeDetails() {
 }
 
 function addWater() {
-  const water = new THREE.Mesh(
-    new THREE.CircleGeometry(17, 56),
-    new THREE.MeshStandardMaterial({
-      color: 0x17475d,
-      emissive: 0x0a6f87,
-      emissiveIntensity: 0.18,
-      roughness: 0.42,
-      metalness: 0.12,
-      transparent: true,
-      opacity: 0.84
-    })
-  );
-  water.rotation.x = -Math.PI / 2;
-  water.position.set(-36, terrainHeight(-36, -34) + 0.08, -34);
-  water.scale.set(1.55, 0.72, 1);
-  water.receiveShadow = true;
-  scene.add(water);
+  const shoreMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4d442c,
+    roughness: 0.96,
+    metalness: 0.02,
+    transparent: true,
+    opacity: 0.72
+  });
+  const waterMaterial = new THREE.MeshStandardMaterial({
+    color: 0x123d56,
+    emissive: 0x0b7c99,
+    emissiveIntensity: 0.25,
+    roughness: 0.26,
+    metalness: 0.2,
+    transparent: true,
+    opacity: 0.88
+  });
+  const rippleMaterial = new THREE.MeshBasicMaterial({
+    color: 0x8cecff,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  waterBodies.forEach((body, index) => {
+    const shore = new THREE.Mesh(new THREE.RingGeometry(0.96, 1.22, 72), shoreMaterial);
+    shore.rotation.x = -Math.PI / 2;
+    shore.position.set(body.x, terrainHeight(body.x, body.z) + 0.035, body.z);
+    shore.scale.set(body.rx, body.rz, 1);
+    shore.receiveShadow = true;
+    scene.add(shore);
+
+    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 72), waterMaterial);
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(body.x, terrainHeight(body.x, body.z) + 0.1, body.z);
+    water.scale.set(body.rx, body.rz, 1);
+    water.receiveShadow = true;
+    water.name = `moonlit-pond-${index}`;
+    water.userData = { waveOffset: index * 0.8 + body.x * 0.03 };
+    waterSurfaces.push(water);
+    scene.add(water);
+
+    for (let ripple = 0; ripple < 3; ripple += 1) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.18 + ripple * 0.18, 0.2 + ripple * 0.18, 64), rippleMaterial);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(
+        body.x + Math.cos(index + ripple * 1.7) * body.rx * 0.2,
+        terrainHeight(body.x, body.z) + 0.13 + ripple * 0.006,
+        body.z + Math.sin(index * 0.7 + ripple) * body.rz * 0.2
+      );
+      ring.scale.set(body.rx * 0.8, body.rz * 0.8, 1);
+      ring.name = `water-ripple-${index}-${ripple}`;
+      ring.userData = {
+        baseScaleX: ring.scale.x,
+        baseScaleY: ring.scale.y,
+        rippleOffset: index * 1.3 + ripple * 0.8
+      };
+      waterRipples.push(ring);
+      scene.add(ring);
+    }
+  });
 }
 
 function addBoundaryFence() {
@@ -567,23 +674,294 @@ function addBoundaryFence() {
   scene.add(postMesh, railMesh);
 }
 
+function addFarmDetails() {
+  addPastureFences();
+  addBarn(48, 48, -0.34);
+  addFarmLanterns();
+  addHayBales();
+  addFieldRows();
+  addPathStones();
+  addGrassClumps();
+}
+
+function addPastureFences() {
+  [
+    [22, 27, 36, 27],
+    [-48, 36, 34, 30],
+    [48, -34, 36, 29],
+    [-2, 54, 30, 20]
+  ].forEach(([x, z, width, depth]) => {
+    addRectFence(x, z, width, depth, 5.8);
+  });
+}
+
+function addRectFence(centerX, centerZ, width, depth, spacing) {
+  const postGeometry = new THREE.CylinderGeometry(0.1, 0.13, 1.18, 6);
+  const railGeometry = new THREE.BoxGeometry(spacing * 0.82, 0.1, 0.1);
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x6d4a2b,
+    roughness: 0.86,
+    metalness: 0.02
+  });
+  const halfWidth = width * 0.5;
+  const halfDepth = depth * 0.5;
+  const xSegments = Math.max(3, Math.round(width / spacing));
+  const zSegments = Math.max(3, Math.round(depth / spacing));
+  const group = new THREE.Group();
+
+  const makePost = (x, z) => {
+    const post = new THREE.Mesh(postGeometry, material);
+    post.position.set(x, terrainHeight(x, z) + 0.58, z);
+    post.castShadow = true;
+    post.receiveShadow = true;
+    group.add(post);
+  };
+
+  const makeRail = (x, z, rotationY, length, heightOffset) => {
+    const rail = new THREE.Mesh(railGeometry, material);
+    rail.scale.x = length / spacing;
+    rail.rotation.y = rotationY;
+    rail.position.set(x, terrainHeight(x, z) + heightOffset, z);
+    rail.castShadow = true;
+    rail.receiveShadow = true;
+    group.add(rail);
+  };
+
+  for (let i = 0; i <= xSegments; i += 1) {
+    const x = centerX - halfWidth + (i / xSegments) * width;
+    makePost(x, centerZ - halfDepth);
+    makePost(x, centerZ + halfDepth);
+  }
+
+  for (let i = 0; i <= zSegments; i += 1) {
+    const z = centerZ - halfDepth + (i / zSegments) * depth;
+    makePost(centerX - halfWidth, z);
+    makePost(centerX + halfWidth, z);
+  }
+
+  for (let i = 0; i < xSegments; i += 1) {
+    const x = centerX - halfWidth + ((i + 0.5) / xSegments) * width;
+    const length = width / xSegments;
+    for (const y of [0.58, 0.92]) {
+      makeRail(x, centerZ - halfDepth, 0, length, y);
+      makeRail(x, centerZ + halfDepth, 0, length, y);
+    }
+  }
+
+  for (let i = 0; i < zSegments; i += 1) {
+    const z = centerZ - halfDepth + ((i + 0.5) / zSegments) * depth;
+    const length = depth / zSegments;
+    for (const y of [0.58, 0.92]) {
+      makeRail(centerX - halfWidth, z, Math.PI / 2, length, y);
+      makeRail(centerX + halfWidth, z, Math.PI / 2, length, y);
+    }
+  }
+
+  scene.add(group);
+}
+
+function addBarn(x, z, rotationY = 0) {
+  const group = new THREE.Group();
+  const wallMaterial = new THREE.MeshStandardMaterial({
+    color: 0x7a2e2d,
+    emissive: 0x170706,
+    roughness: 0.74
+  });
+  const roofMaterial = new THREE.MeshStandardMaterial({
+    color: 0x232737,
+    roughness: 0.82,
+    metalness: 0.06
+  });
+  const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xd7c9a1, roughness: 0.7 });
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(8.5, 4.8, 6.8), wallMaterial);
+  body.position.y = 2.4;
+  body.castShadow = true;
+  body.receiveShadow = true;
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(5.8, 3.2, 4), roofMaterial);
+  roof.position.y = 5.3;
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.z = 0.72;
+  roof.castShadow = true;
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.8, 0.12), trimMaterial);
+  door.position.set(0, 1.45, -3.45);
+
+  const loft = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1, 0.13), trimMaterial);
+  loft.position.set(0, 3.72, -3.46);
+
+  const warmWindow = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.64, 0.14),
+    new THREE.MeshBasicMaterial({ color: 0xffd27a })
+  );
+  warmWindow.position.set(-2.75, 2.65, -3.47);
+
+  group.add(body, roof, door, loft, warmWindow);
+  group.rotation.y = rotationY;
+  group.position.set(x, terrainHeight(x, z), z);
+  scene.add(group);
+}
+
+function addFarmLanterns() {
+  const postMaterial = new THREE.MeshStandardMaterial({ color: 0x3d2a1a, roughness: 0.82 });
+  const lampMaterial = new THREE.MeshBasicMaterial({ color: 0xffc46a });
+
+  [
+    [39, 45],
+    [54, 43],
+    [-64, 54],
+    [11, 30],
+    [-34, 27]
+  ].forEach(([x, z], index) => {
+    const group = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.4, 6), postMaterial);
+    post.position.y = 1.2;
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), lampMaterial);
+    lamp.position.y = 2.48;
+    const glow = new THREE.PointLight(0xffb45e, 1.25, 14, 1.9);
+    glow.position.y = 2.35;
+    group.add(post, lamp, glow);
+    group.position.set(x, terrainHeight(x, z), z);
+    group.rotation.y = index * 0.4;
+    scene.add(group);
+  });
+}
+
+function addHayBales() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xb9903b,
+    emissive: 0x201304,
+    roughness: 0.92
+  });
+  const geometry = new THREE.CylinderGeometry(0.72, 0.72, 1.2, 12);
+
+  [
+    [40, 42, 0.1],
+    [43, 45, 0.6],
+    [53, 40, -0.25],
+    [-30, 48, 0.4],
+    [-34, 44, -0.4],
+    [28, -16, 0.25]
+  ].forEach(([x, z, rotation]) => {
+    const bale = new THREE.Mesh(geometry, material);
+    bale.rotation.z = Math.PI / 2;
+    bale.rotation.y = rotation;
+    bale.position.set(x, terrainHeight(x, z) + 0.72, z);
+    bale.castShadow = true;
+    bale.receiveShadow = true;
+    scene.add(bale);
+  });
+}
+
+function addFieldRows() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x4b3a21,
+    roughness: 0.96
+  });
+  for (let i = 0; i < 7; i += 1) {
+    const x = -64 + i * 3.8;
+    const z = 58;
+    const row = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.08, 28), material);
+    row.rotation.y = -0.24;
+    row.position.set(x, terrainHeight(x, z) + 0.08, z);
+    row.receiveShadow = true;
+    scene.add(row);
+  }
+}
+
+function addPathStones() {
+  const geometry = new THREE.DodecahedronGeometry(0.45, 0);
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x5c5c55,
+    roughness: 0.96
+  });
+  const points = [];
+  for (let i = 0; i < 36; i += 1) {
+    const t = i / 35;
+    points.push([
+      THREE.MathUtils.lerp(-72, 44, t) + Math.sin(i * 1.9) * 2.1,
+      THREE.MathUtils.lerp(56, 43, t) + Math.cos(i * 1.3) * 1.5
+    ]);
+  }
+
+  points.forEach(([x, z], index) => {
+    if (index % 3 === 0) return;
+    const stone = new THREE.Mesh(geometry, material);
+    stone.position.set(x, terrainHeight(x, z) + 0.12, z);
+    stone.scale.set(0.6 + (index % 4) * 0.1, 0.16, 0.42 + (index % 3) * 0.08);
+    stone.rotation.set(index * 0.13, index * 0.41, index * 0.07);
+    stone.receiveShadow = true;
+    scene.add(stone);
+  });
+}
+
+function addGrassClumps() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x2f6a34,
+    roughness: 0.95
+  });
+  const geometry = new THREE.ConeGeometry(0.24, 0.9, 5);
+  const clumps = new THREE.InstancedMesh(geometry, material, 140);
+  let count = 0;
+
+  for (let i = 0; i < 140; i += 1) {
+    const x = ((i * 47) % 150) - 75 + Math.sin(i * 1.8) * 2.4;
+    const z = ((i * 61) % 150) - 75 + Math.cos(i * 1.4) * 2.4;
+    if (isWater(x, z, 9) || pathAmount(x, z) > 0.45) continue;
+    const scale = 0.55 + (i % 5) * 0.08;
+    tempObject.position.set(x, terrainHeight(x, z) + 0.42 * scale, z);
+    tempObject.rotation.set(0, i * 0.77, 0);
+    tempObject.scale.set(scale, scale * (0.75 + (i % 4) * 0.12), scale);
+    tempObject.updateMatrix();
+    clumps.setMatrixAt(count, tempObject.matrix);
+    count += 1;
+  }
+
+  clumps.count = count;
+  clumps.castShadow = true;
+  clumps.receiveShadow = true;
+  scene.add(clumps);
+}
+
 function addTrees() {
   const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.32, 1.8, 6);
   const crownGeometry = new THREE.ConeGeometry(1.05, 2.6, 7);
   const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.9 });
   const crownMaterial = new THREE.MeshStandardMaterial({ color: 0x123c2b, roughness: 0.95 });
-  const trunkMesh = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, 92);
-  const crownMesh = new THREE.InstancedMesh(crownGeometry, crownMaterial, 92);
+  const maxTrees = 145;
+  const trunkMesh = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, maxTrees);
+  const crownMesh = new THREE.InstancedMesh(crownGeometry, crownMaterial, maxTrees);
   let count = 0;
+  const clusterCenters = [
+    [-67, -58, 18, 19],
+    [-66, 8, 16, 18],
+    [-26, 70, 18, 16],
+    [32, 67, 18, 14],
+    [72, 11, 14, 18],
+    [65, -63, 12, 13],
+    [-5, -72, 18, 13]
+  ];
 
-  for (let i = 0; i < 92; i += 1) {
-    const angle = i * 2.39996;
-    const radius = 24 + ((i * 17) % 60);
-    const x = Math.cos(angle) * radius + Math.sin(i * 0.77) * 9;
-    const z = Math.sin(angle) * radius + Math.cos(i * 0.39) * 9;
+  for (let i = 0; i < maxTrees; i += 1) {
+    const cluster = clusterCenters[i % clusterCenters.length];
+    const angle = i * 2.39996 + cluster[0] * 0.01;
+    const spread = i < 95 ? cluster[2] : cluster[3] + 8;
+    const radius = 2 + ((i * 13) % 100) / 100 * spread;
+    const edgeBias = i >= 105 ? 18 + ((i * 19) % 54) : 0;
+    let x = cluster[0] + Math.cos(angle) * radius + Math.sin(i * 0.77) * 1.8;
+    let z = cluster[1] + Math.sin(angle) * radius + Math.cos(i * 0.39) * 1.8;
+
+    if (edgeBias > 0) {
+      const edgeAngle = i * 1.37;
+      x = Math.cos(edgeAngle) * (halfWorld - edgeBias);
+      z = Math.sin(edgeAngle) * (halfWorld - 7 - ((i * 11) % 18));
+    }
+
     if (Math.abs(x) > halfWorld - 5 || Math.abs(z) > halfWorld - 5) continue;
+    if (isWater(x, z, 12) || pastureAmount(x, z) > 0.55 || pathAmount(x, z) > 0.38) continue;
 
-    const scale = 0.82 + ((i * 13) % 7) * 0.08;
+    const scale = 0.72 + ((i * 13) % 9) * 0.075;
     const y = terrainHeight(x, z);
     tempObject.position.set(x, y + 0.86 * scale, z);
     tempObject.rotation.set(0, angle, 0);
@@ -609,11 +987,31 @@ function addTrees() {
 function addRocks() {
   const geometry = new THREE.DodecahedronGeometry(1, 0);
   const material = new THREE.MeshStandardMaterial({ color: 0x565f62, roughness: 0.98 });
-  const rockMesh = new THREE.InstancedMesh(geometry, material, 34);
+  const rockSpots = [
+    [-62, 60],
+    [-58, 66],
+    [-24, -58],
+    [-18, -62],
+    [36, 7],
+    [42, 9],
+    [50, 36],
+    [57, 32],
+    [69, -41],
+    [73, -36],
+    [-68, -12],
+    [14, 66],
+    [4, -73],
+    [60, 5],
+    [-9, 8],
+    [31, -67],
+    [-72, 36],
+    [72, 57]
+  ];
+  const rockMesh = new THREE.InstancedMesh(geometry, material, rockSpots.length);
+  let count = 0;
 
-  for (let i = 0; i < 34; i += 1) {
-    const x = ((i * 37) % 144) - 72;
-    const z = ((i * 53) % 144) - 72;
+  rockSpots.forEach(([x, z], i) => {
+    if (isWater(x, z, 8) || pathAmount(x, z) > 0.48) return;
     tempObject.position.set(x, terrainHeight(x, z) + 0.42, z);
     tempObject.rotation.set(i * 0.27, i * 0.41, i * 0.19);
     tempObject.scale.set(
@@ -622,9 +1020,11 @@ function addRocks() {
       0.45 + (i % 5) * 0.12
     );
     tempObject.updateMatrix();
-    rockMesh.setMatrixAt(i, tempObject.matrix);
-  }
+    rockMesh.setMatrixAt(count, tempObject.matrix);
+    count += 1;
+  });
 
+  rockMesh.count = count;
   rockMesh.castShadow = true;
   rockMesh.receiveShadow = true;
   scene.add(rockMesh);
@@ -853,20 +1253,20 @@ function createBeam() {
 
 function spawnCollectibles() {
   const cowSpots = [
-    [1, 18],
-    [-42, -7],
-    [-31, 23],
-    [-11, -42],
-    [7, 37],
-    [24, -27],
-    [39, 10],
-    [51, -51],
-    [-54, 51],
-    [13, 1],
-    [-4, 58],
-    [59, 31],
-    [-63, -35],
-    [66, -4]
+    [18, 22],
+    [25, 29],
+    [13, 33],
+    [31, 18],
+    [-47, 45],
+    [-55, 35],
+    [-40, 34],
+    [-48, 24],
+    [42, -30],
+    [53, -36],
+    [34, -42],
+    [57, -24],
+    [-6, 55],
+    [4, 48]
   ];
 
   cowSpots.forEach(([x, z], index) => {
@@ -875,7 +1275,7 @@ function spawnCollectibles() {
     addCollectible(cow, "cow", safeSpot.x, safeSpot.z, 100);
   });
 
-  const bonusSpot = [[-48, 5], [34, 53], [58, -16], [-68, 30]][Math.floor(Math.random() * 4)];
+  const bonusSpot = [[-66, 28], [36, 52], [63, -20], [-24, 60]][Math.floor(Math.random() * 4)];
   const human = createBonusHuman();
   const safeBonusSpot = findDrySpot(bonusSpot[0], bonusSpot[1], 99);
   addCollectible(human, "bonus", safeBonusSpot.x, safeBonusSpot.z, 750);
@@ -1023,11 +1423,11 @@ function createBonusHuman() {
 
 function spawnPowerups() {
   [
-    [-21, -11],
-    [41, 38],
-    [-58, 64],
-    [67, -40],
-    [2, -66]
+    [-62, 60],
+    [50, 36],
+    [69, -41],
+    [-22, -59],
+    [34, 6]
   ].forEach(([x, z], index) => {
     const safeSpot = findDrySpot(x, z, index + 120);
     const powerup = createEnergyCore();
@@ -1118,9 +1518,9 @@ function createEnergyCore() {
 
 function spawnHazards() {
   [
-    [-25, 34, 18, 0.9],
-    [44, -4, 25, -0.75],
-    [-58, -40, 15, 1.15]
+    [24, 28, 17, 0.9],
+    [48, -34, 19, -0.82],
+    [-50, 35, 16, 1.05]
   ].forEach(([x, z, radius, speed], index) => {
     const hazard = createPatrolDrone(index);
     hazard.userData = {
@@ -1218,6 +1618,7 @@ function tick() {
   }
 
   updateCollectibles(elapsed);
+  updateLandscape(elapsed);
   updateCamera(delta);
   updateAudio();
   updateHud(false, elapsed);
@@ -1544,6 +1945,7 @@ function drawMinimap(elapsed) {
   minimap.fillRect(0, 0, size, size);
 
   drawMapBoundary(size, scale);
+  drawMapWater(size, scale);
 
   minimap.strokeStyle = "rgba(150, 220, 255, 0.12)";
   minimap.lineWidth = 1;
@@ -1600,6 +2002,23 @@ function drawMinimap(elapsed) {
   minimap.restore();
 }
 
+function updateLandscape(elapsed) {
+  waterSurfaces.forEach((water) => {
+    water.material.emissiveIntensity = 0.22 + Math.sin(elapsed * 1.4 + water.userData.waveOffset) * 0.04;
+  });
+
+  waterRipples.forEach((ripple) => {
+    const offset = ripple.userData.rippleOffset || 0;
+    const pulse = 1 + Math.sin(elapsed * 1.7 + offset) * 0.035;
+    ripple.scale.set(
+      ripple.userData.baseScaleX * pulse,
+      ripple.userData.baseScaleY * pulse,
+      1
+    );
+    ripple.material.opacity = 0.16 + Math.sin(elapsed * 1.4 + offset) * 0.06;
+  });
+}
+
 function drawMapDots(items, colorForItem, size, scale, radius) {
   for (const item of items) {
     const color = colorForItem(item);
@@ -1610,6 +2029,28 @@ function drawMapDots(items, colorForItem, size, scale, radius) {
     minimap.arc(point.x, point.y, radius, 0, Math.PI * 2);
     minimap.fillStyle = color;
     minimap.fill();
+  }
+}
+
+function drawMapWater(size, scale) {
+  minimap.fillStyle = "rgba(35, 144, 190, 0.32)";
+  minimap.strokeStyle = "rgba(130, 235, 255, 0.26)";
+  minimap.lineWidth = 1;
+
+  for (const body of waterBodies) {
+    minimap.beginPath();
+    for (let i = 0; i <= 40; i += 1) {
+      const angle = (i / 40) * Math.PI * 2;
+      const point = radarPoint({
+        x: body.x + Math.cos(angle) * body.rx,
+        z: body.z + Math.sin(angle) * body.rz
+      }, size, scale, false);
+      if (i === 0) minimap.moveTo(point.x, point.y);
+      else minimap.lineTo(point.x, point.y);
+    }
+    minimap.closePath();
+    minimap.fill();
+    minimap.stroke();
   }
 }
 
