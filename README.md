@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" alt="UFO Cow Hunt logo" width="25%">
 
-A small 3D browser game built with Three.js: fly a UFO across stylized low-poly landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
+A small 3D browser game built with Three.js: fly a UFO across stylized low-poly night landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, desert ruins, farm fields, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
 
 ![UFO Cow Hunt](https://img.shields.io/badge/Three.js-3D%20Browsergame-79fff0)
 ![Vite](https://img.shields.io/badge/Vite-dev%20server-fff2a5)
@@ -15,7 +15,7 @@ A small 3D browser game built with Three.js: fly a UFO across stylized low-poly 
 
 ## Gameplay
 
-You control a UFO across selectable mission zones. The current levels are Farm Night with cows and Desert Hunt with camels. Animals give points, a rare bonus human gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger alarms and drain beam energy.
+You control a UFO across selectable mission zones. The current levels are Farm Night with cows and Desert Hunt with camels. Animals give points, a rare bonus human or traveler gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger loud alarms, flash the HUD, slow the UFO, and drain beam energy when they lock onto you.
 
 Each mission is split into three waves in the same selected level:
 
@@ -23,13 +23,14 @@ Each mission is split into three waves in the same selected level:
 - Wave 2: abduct 15 animals
 - Wave 3: abduct 20 animals
 
-Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission. After Wave 3 is cleared, the UFO blasts into the sky, the takeoff sound plays, and your final time and score are shown.
+Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. After Wave 3 is cleared, the UFO blasts into the sky, the takeoff sound plays, and your final time and score are shown.
 
 ## Features
 
-- Low-poly 3D landscape with terrain, water, trees, rocks, clouds, stars, and moonlight
+- Low-poly 3D landscapes with terrain, clouds, stars, moonlight, and level-specific props
 - Level selection with Farm Night and Desert Hunt
-- Desert level with sandy terrain, dunes, sandstone boundary blocks, small palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler bonus human, and a collidable pyramid
+- Farm Night with fields, ponds, trees, fences, hay bales, cows, and a rare bonus human
+- Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
 - Detailed UFO with metal rivets, glass dome, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave summaries and score bonuses
@@ -37,7 +38,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 - Rotating radar with targets, drones, and world boundary
 - Score system with combo multiplier and final score breakdown
 - Beam energy, boost, and rechargeable energy crystals
-- Search drones with alarm and energy-drain behavior
+- Search drones with louder contact alarms, visible red HUD feedback, scan beams, UFO slowdown, and energy-drain behavior
 - Level selection, instruction screen, settings menu, and larger mission-complete reward screen
 - Separate volume controls for UFO/effects and music
 - Music playlist using `music_1.mp3` and `music_2.mp3`
