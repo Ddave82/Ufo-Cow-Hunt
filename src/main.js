@@ -510,6 +510,7 @@ function resetRunState() {
   ufo.trail.scale.set(1, 0.9, 1);
   ufo.trail.material.opacity = 0.2;
   ufo.engineGlow.intensity = 5.2;
+  ufo.boostGlow.material.opacity = 0;
   beam.visible = false;
 
   prepareWave(0);
@@ -1052,11 +1053,13 @@ function addPyramid() {
   const z = desertPyramid.z;
   const baseY = terrainHeight(x, z);
   const group = new THREE.Group();
+  const stoneTexture = createPyramidStoneTexture();
   const sandStone = new THREE.MeshStandardMaterial({
     color: 0xd9a65a,
+    map: stoneTexture,
     emissive: 0x3f250c,
     emissiveIntensity: 0.16,
-    roughness: 0.92
+    roughness: 0.94
   });
   const darkStone = new THREE.MeshStandardMaterial({
     color: 0x8a6536,
@@ -1104,6 +1107,51 @@ function addPyramid() {
   shadow.position.set(x, baseY + 0.08, z);
   shadow.scale.set(1.15, 0.78, 1);
   addLevelObject(shadow);
+}
+
+function createPyramidStoneTexture() {
+  const textureCanvas = document.createElement("canvas");
+  textureCanvas.width = 512;
+  textureCanvas.height = 512;
+  const context = textureCanvas.getContext("2d");
+  const gradient = context.createLinearGradient(0, 0, 0, textureCanvas.height);
+  gradient.addColorStop(0, "#e0b168");
+  gradient.addColorStop(1, "#bd8748");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, textureCanvas.width, textureCanvas.height);
+
+  context.strokeStyle = "rgba(99, 61, 25, 0.44)";
+  context.lineWidth = 3;
+  for (let row = 0; row < 15; row += 1) {
+    const y = 22 + row * 32 + Math.sin(row * 1.3) * 3;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(textureCanvas.width, y + Math.sin(row * 0.8) * 3);
+    context.stroke();
+
+    const blockWidth = 54 + (row % 4) * 8;
+    const offset = row % 2 === 0 ? 0 : blockWidth * 0.48;
+    for (let x = -offset; x < textureCanvas.width; x += blockWidth) {
+      context.beginPath();
+      context.moveTo(x, y - 30);
+      context.lineTo(x + Math.sin((x + row) * 0.04) * 2, y - 2);
+      context.stroke();
+    }
+  }
+
+  context.fillStyle = "rgba(255, 225, 156, 0.12)";
+  for (let i = 0; i < 120; i += 1) {
+    const px = (i * 71) % textureCanvas.width;
+    const py = (i * 43) % textureCanvas.height;
+    context.fillRect(px, py, 2 + (i % 3), 1);
+  }
+
+  const texture = new THREE.CanvasTexture(textureCanvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2.4, 2.1);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 function addDesertOases() {
@@ -2064,6 +2112,19 @@ function createUfo() {
   const engineGlow = new THREE.PointLight(0x8ffff1, 6, 24);
   engineGlow.position.y = -0.35;
 
+  const boostGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(3.15, 36, 14),
+    new THREE.MeshBasicMaterial({
+      color: 0x8ffff1,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+  );
+  boostGlow.scale.set(1.55, 0.18, 1.55);
+  boostGlow.position.y = -0.02;
+
   const trail = new THREE.Mesh(
     new THREE.ConeGeometry(0.5, 3.2, 18, 1, true),
     new THREE.MeshBasicMaterial({
@@ -2077,8 +2138,8 @@ function createUfo() {
   trail.rotation.x = Math.PI;
   trail.position.y = -1.8;
 
-  group.add(saucer, rim, rivets, panelRing, alien, dome, engineGlow, trail);
-  return { group, rim, trail, engineGlow };
+  group.add(boostGlow, saucer, rim, rivets, panelRing, alien, dome, engineGlow, trail);
+  return { group, rim, trail, engineGlow, boostGlow };
 }
 
 function createBeam() {
@@ -2880,6 +2941,16 @@ function updateUfo(delta, elapsed) {
   ufo.trail.scale.set(1, boosting ? 1.75 : 0.9 + ufoState.velocity.length() * 0.02, 1);
   ufo.trail.material.opacity = boosting ? 0.38 : 0.2;
   ufo.engineGlow.intensity = boosting ? 10 : 5.2 + ufoState.velocity.length() * 0.12;
+  ufo.boostGlow.material.opacity = THREE.MathUtils.lerp(
+    ufo.boostGlow.material.opacity,
+    boosting ? 0.18 + Math.sin(elapsed * 16) * 0.035 : 0,
+    0.18
+  );
+  ufo.boostGlow.scale.set(
+    1.55 + (boosting ? Math.sin(elapsed * 12) * 0.03 : 0),
+    0.18,
+    1.55 + (boosting ? Math.cos(elapsed * 11) * 0.03 : 0)
+  );
 }
 
 function handleUfoCollisions() {
