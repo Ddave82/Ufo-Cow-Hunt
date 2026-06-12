@@ -135,6 +135,14 @@ body.drone-alert::after {
   text-transform: uppercase;
 }
 
+#wave-timer.timer-warning {
+  color: #ffccd3;
+  text-shadow:
+    0 0 10px rgba(255, 70, 100, 0.88),
+    0 0 24px rgba(255, 70, 100, 0.3);
+  animation: timerWarningPulse 420ms ease-in-out infinite alternate;
+}
+
 .status {
   display: grid;
   gap: 8px;
@@ -689,6 +697,16 @@ body[data-preview-level="desert"] .menu-panel {
 @keyframes droneScreenPulse {
   50% {
     opacity: calc(0.24 + var(--drone-drain-strength, 0) * 0.34);
+  }
+}
+
+@keyframes timerWarningPulse {
+  from {
+    transform: scale(1);
+  }
+
+  to {
+    transform: scale(1.04);
   }
 }
 

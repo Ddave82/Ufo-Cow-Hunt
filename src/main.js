@@ -8,6 +8,7 @@ const musicUrls = [
 ];
 const beamSoundUrl = new URL("../sounds/beam.mp3", import.meta.url).href;
 const takeoffSoundUrl = new URL("../sounds/takeoff.mp3", import.meta.url).href;
+const countdownSoundUrl = new URL("../sounds/countdown.mp3", import.meta.url).href;
 
 const canvas = document.querySelector("#game");
 const minimapCanvas = document.querySelector("#minimap");
@@ -15,6 +16,7 @@ const minimap = minimapCanvas.getContext("2d");
 const scoreNode = document.querySelector("#score");
 const comboNode = document.querySelector("#combo");
 const targetCountNode = document.querySelector("#target-count");
+const waveTimerNode = document.querySelector("#wave-timer");
 const bonusStatusNode = document.querySelector("#bonus-status");
 const dangerStatusNode = document.querySelector("#danger-status");
 const energyNode = document.querySelector("#energy");
@@ -22,6 +24,7 @@ const energyFillNode = document.querySelector("#energy-fill");
 const energyLabelNode = document.querySelector("#energy-label");
 const messageNode = document.querySelector("#message");
 const endScreenNode = document.querySelector("#end-screen");
+const finalTitleNode = document.querySelector("#final-title");
 const finalLevelNode = document.querySelector("#final-level");
 const finalTimeNode = document.querySelector("#final-time");
 const finalScoreNode = document.querySelector("#final-score");
@@ -159,9 +162,9 @@ const hazards = [];
 const waterSurfaces = [];
 const waterRipples = [];
 const waveConfigs = [
-  { number: 1, cowGoal: 10, bonus: 500 },
-  { number: 2, cowGoal: 15, bonus: 750 },
-  { number: 3, cowGoal: 20, bonus: 1000 }
+  { number: 1, cowGoal: 10, bonus: 500, timeLimit: 100 },
+  { number: 2, cowGoal: 15, bonus: 750, timeLimit: 120 },
+  { number: 3, cowGoal: 20, bonus: 1000, timeLimit: 135 }
 ];
 const maxWaveCows = Math.max(...waveConfigs.map((wave) => wave.cowGoal));
 const levelObjects = [];
@@ -178,7 +181,7 @@ const levelConfigs = {
     objectiveCopy: "Fly the UFO, abduct every cow, avoid search drones, and keep your beam charged with energy diamonds.",
     beamTip: "Hover over cows or bonus targets.",
     animalTip: "Beam them up for points.",
-    waveTip: "Clear 10, then 15, then 20 cows.",
+    waveTip: "Timed waves: 10 in 1:40, 15 in 2:00, 20 in 2:15.",
     waveStartHint: "Collect every cow to advance.",
     calmText: "Rare bonus hidden",
     alarmText: "Farm alarm!",
@@ -212,7 +215,7 @@ const levelConfigs = {
     objectiveCopy: "Fly the UFO across dunes, abduct every camel, dodge search drones, and recharge with energy diamonds.",
     beamTip: "Hover over camels or bonus travelers.",
     animalTip: "Beam them up for points.",
-    waveTip: "Clear 10, then 15, then 20 camels.",
+    waveTip: "Timed waves: 10 in 1:40, 15 in 2:00, 20 in 2:15.",
     waveStartHint: "Collect every camel to advance.",
     calmText: "Traveler hidden",
     alarmText: "Desert alarm!",
@@ -255,6 +258,9 @@ let gameStarted = false;
 let currentWaveIndex = 0;
 let waveCowGoal = waveConfigs[0].cowGoal;
 let waveCowsCollected = 0;
+let waveStartedAt = 0;
+let waveTimeRemaining = waveConfigs[0].timeLimit;
+let countdownPlayedForWave = -1;
 let totalCowsCollected = 0;
 let selectedLevelId = "farm";
 let activeLevelId = "farm";
@@ -272,6 +278,7 @@ let musicTrackIndex = 0;
 let beamAudio = null;
 let beamPreviewAudio = null;
 let takeoffAudio = null;
+let countdownAudio = null;
 let lastAlertSound = 0;
 let lastNoPowerFeedback = -Infinity;
 let lastCollisionFeedback = -Infinity;
@@ -418,15 +425,17 @@ function startGame() {
   gameStarted = true;
   firstMove = true;
   missionStartTime = clock.elapsedTime;
+  startWaveTimer(missionStartTime);
   startScreenNode.classList.add("hidden");
   settingsPanelNode.classList.add("hidden");
   messageNode.classList.add("hidden");
   initAudio();
   clock.getDelta();
   const level = getActiveLevel();
+  const firstWave = waveConfigs[0];
   showWaveMessage(
     "WAVE 1 START",
-    `${level.animalPlural.toUpperCase()}: 0 / ${waveConfigs[0].cowGoal}`,
+    `${level.animalPlural.toUpperCase()}: 0 / ${firstWave.cowGoal} - TIME ${formatTime(firstWave.timeLimit)}`,
     level.waveStartHint
   );
   waveTransitionTimers.push(window.setTimeout(() => {
@@ -495,11 +504,15 @@ function resetRunState() {
   takeoffUntil = 0;
   lastHudUpdate = 0;
   currentWaveIndex = 0;
+  waveStartedAt = 0;
+  waveTimeRemaining = waveConfigs[0].timeLimit;
+  countdownPlayedForWave = -1;
   totalCowsCollected = 0;
   waveTransitionActive = false;
   keys.clear();
   stopBeamSound();
   stopTakeoffSound();
+  stopCountdownSound();
 
   ufoState.velocity.set(0, 0, 0);
   ufoState.yaw = Math.PI;
@@ -2294,6 +2307,29 @@ function getCurrentWaveConfig() {
   return waveConfigs[currentWaveIndex];
 }
 
+function startWaveTimer(elapsed = clock.elapsedTime) {
+  const config = getCurrentWaveConfig();
+  waveStartedAt = elapsed;
+  waveTimeRemaining = config.timeLimit;
+  countdownPlayedForWave = -1;
+  stopCountdownSound();
+}
+
+function updateWaveTimer(elapsed) {
+  if (!gameStarted || gameWon || waveTransitionActive) return;
+  const config = getCurrentWaveConfig();
+  waveTimeRemaining = Math.max(0, config.timeLimit - (elapsed - waveStartedAt));
+
+  if (waveTimeRemaining <= 10 && countdownPlayedForWave !== currentWaveIndex) {
+    countdownPlayedForWave = currentWaveIndex;
+    playCountdownSound();
+  }
+
+  if (waveTimeRemaining <= 0) {
+    finishMission(elapsed, { completed: false });
+  }
+}
+
 function resetCollectibleState(item, active = true) {
   item.visible = active;
   item.rotation.z = 0;
@@ -2858,6 +2894,7 @@ function tick() {
     updateBeam(delta, elapsed);
     updatePowerups(delta, elapsed, true);
     updateHazards(delta, elapsed, true);
+    updateWaveTimer(elapsed);
   } else {
     beam.visible = false;
     beamActive = false;
@@ -3368,6 +3405,8 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
   targetCountNode.textContent = `Wave ${currentWaveIndex + 1} / ${waveConfigs.length}`;
   const level = getActiveLevel();
   bonusStatusNode.textContent = `${capitalize(level.animalPlural)}: ${waveCowsCollected} / ${waveCowGoal}`;
+  waveTimerNode.textContent = `Time ${formatTime(waveTimeRemaining)}`;
+  waveTimerNode.classList.toggle("timer-warning", gameStarted && !gameWon && !waveTransitionActive && waveTimeRemaining <= 10);
 
   if (elapsed < droneDrainUntil) dangerStatusNode.textContent = "Energy draining!";
   else if (alertLevel > 70) dangerStatusNode.textContent = level.alarmText;
@@ -3387,6 +3426,7 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
 function completeWave(elapsed) {
   if (waveTransitionActive || gameWon) return;
   const completedWave = getCurrentWaveConfig();
+  stopCountdownSound();
   score += completedWave.bonus;
   scoreBreakdown.waveBonusScore += completedWave.bonus;
   waveTransitionActive = true;
@@ -3415,12 +3455,13 @@ function completeWave(elapsed) {
   waveTransitionTimers.push(window.setTimeout(() => {
     showWaveMessage(
       `WAVE ${nextWave.number} START`,
-      `${getActiveLevel().animalPlural.toUpperCase()}: 0 / ${nextWave.cowGoal}`,
+      `${getActiveLevel().animalPlural.toUpperCase()}: 0 / ${nextWave.cowGoal} - TIME ${formatTime(nextWave.timeLimit)}`,
       nextHint
     );
   }, 1350));
   waveTransitionTimers.push(window.setTimeout(() => {
     prepareWave(currentWaveIndex + 1);
+    startWaveTimer(clock.elapsedTime);
     waveTransitionActive = false;
     messageNode.classList.add("hidden");
     messageNode.classList.remove("wave-message");
@@ -3439,27 +3480,37 @@ function clearWaveTransitionTimers() {
   waveTransitionTimers.forEach((timer) => window.clearTimeout(timer));
   waveTransitionTimers = [];
   window.clearTimeout(flashMessage.timeout);
+  stopCountdownSound();
   messageNode.classList.remove("wave-message");
 }
 
-function finishMission(elapsed) {
+function finishMission(elapsed, { completed = true } = {}) {
   if (gameWon) return;
   clearWaveTransitionTimers();
+  stopCountdownSound();
+  updateBeamSound(false);
   gameWon = true;
   missionEndTime = elapsed;
-  takeoffUntil = elapsed + 4.2;
-  const energyBonus = Math.round(beamEnergy) * 4;
-  score += energyBonus;
-  scoreBreakdown.energyBonusScore += energyBonus;
+  takeoffUntil = completed ? elapsed + 4.2 : elapsed;
+  if (completed) {
+    const energyBonus = Math.round(beamEnergy) * 4;
+    score += energyBonus;
+    scoreBreakdown.energyBonusScore += energyBonus;
+  }
   scoreNode.textContent = score.toLocaleString("en-US");
+  finalTitleNode.textContent = completed ? "Level Complete!" : "Time Up!";
   finalLevelNode.textContent = getActiveLevel().displayName;
   finalTimeNode.textContent = `Time: ${formatTime(missionEndTime - missionStartTime)}`;
   finalScoreNode.textContent = `Score: ${score.toLocaleString("en-US")}`;
   updateFinalBreakdown();
   endScreenNode.classList.remove("hidden");
-  flashMessage("Mission complete. All targets collected.");
-  playTakeoffSound();
-  playBonusJingle();
+  flashMessage(completed ? "Mission complete. All targets collected." : "Time up. Score locked.");
+  if (completed) {
+    playTakeoffSound();
+    playBonusJingle();
+  } else {
+    playNoPowerSound();
+  }
 }
 
 function formatTime(seconds) {
@@ -3730,6 +3781,7 @@ function initAudio() {
   startMusicPlaylist();
   setupBeamSound();
   setupTakeoffSound();
+  setupCountdownSound();
   startAtmoLoop();
   resumeAudioContext(ctx);
   playMusicTrack();
@@ -3755,6 +3807,7 @@ function updateEffectsVolume() {
   audio.effectsGain.gain.setTargetAtTime(getEffectsGain(), audio.ctx.currentTime, 0.03);
   updateBeamVolume();
   updateTakeoffVolume();
+  updateCountdownVolume();
 }
 
 function updateMusicVolume() {
@@ -3902,6 +3955,36 @@ function stopTakeoffSound() {
   if (!takeoffAudio) return;
   takeoffAudio.pause();
   takeoffAudio.currentTime = 0;
+}
+
+function setupCountdownSound() {
+  if (countdownAudio) return;
+  countdownAudio = new Audio(countdownSoundUrl);
+  countdownAudio.preload = "auto";
+  updateCountdownVolume();
+}
+
+function updateCountdownVolume() {
+  if (!countdownAudio) return;
+  countdownAudio.volume = soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 0.95, 0, 1);
+}
+
+function playCountdownSound() {
+  initAudio();
+  setupCountdownSound();
+  if (!countdownAudio || soundMuted) return;
+  updateCountdownVolume();
+  countdownAudio.pause();
+  countdownAudio.currentTime = 0;
+  countdownAudio.play().catch(() => {
+    // Browsers may allow this only after the first user gesture.
+  });
+}
+
+function stopCountdownSound() {
+  if (!countdownAudio) return;
+  countdownAudio.pause();
+  countdownAudio.currentTime = 0;
 }
 
 function playCollectSound(isBonus) {

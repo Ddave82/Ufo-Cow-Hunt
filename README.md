@@ -19,11 +19,11 @@ You control a UFO across selectable mission zones. The current levels are Farm N
 
 Each mission is split into three waves in the same selected level:
 
-- Wave 1: abduct 10 animals
-- Wave 2: abduct 15 animals
-- Wave 3: abduct 20 animals
+- Wave 1: abduct 10 animals in 1:40
+- Wave 2: abduct 15 animals in 2:00
+- Wave 3: abduct 20 animals in 2:15
 
-Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. After Wave 3 is cleared, the UFO blasts into the sky, the takeoff sound plays, and your final time and score are shown.
+Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the mission ends and only the points collected up to that moment count. After Wave 3 is cleared in time, the UFO blasts into the sky, the takeoff sound plays, and your final time and score are shown.
 
 ## Features
 
@@ -33,7 +33,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 - Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
 - Detailed UFO with metal rivets, glass dome, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
-- Three-wave progression with wave summaries and score bonuses
+- Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
 - Wave-specific animal behavior: boost scares animals from Wave 2 onward, and targets wander slowly in Wave 3
 - Rotating radar with targets, drones, and world boundary
 - Score system with combo multiplier and final score breakdown
@@ -43,6 +43,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 - Separate volume controls for UFO/effects and music
 - Music playlist using `music_1.mp3` and `music_2.mp3`
 - Ambient sound, beam sound, takeoff sound, and gameplay feedback sounds
+- Countdown sound near the end of each wave
 
 ## Controls
 
@@ -101,7 +102,7 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 - `atmo.mp3`: ambient atmosphere, played at regular intervals
 - `beam.mp3`: beam sound while abducting targets
 - `takeoff.mp3`: sound for successful level completion
-- `countdown.mp3`: reserved for a future round timer/countdown mechanic
+- `countdown.mp3`: warning sound near the end of each wave timer
 
 ## Tech Stack
 
@@ -111,4 +112,4 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 
 ## Status
 
-Playable prototype. The next larger idea is a round timer with a countdown once the right balance between relaxed exploration and extra action has been found.
+Playable prototype with two mission zones, timed waves, scoring, drone pressure, and local audio assets.
