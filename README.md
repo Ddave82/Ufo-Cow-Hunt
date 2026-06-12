@@ -119,4 +119,4 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 
 ## Status
 
-Playable prototype with two mission zones, timed waves, scoring, drone pressure, and local audio assets.
+Playable prototype with three mission zones, timed waves, scoring, drone pressure, and local audio assets.
