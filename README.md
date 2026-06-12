@@ -29,7 +29,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 
 - Low-poly 3D landscape with terrain, water, trees, rocks, clouds, stars, and moonlight
 - Level selection with Farm Night and Desert Hunt
-- Desert level with sandy terrain, dunes, rocks, cacti, a small camp, camels, a desert traveler bonus human, and a collidable pyramid
+- Desert level with sandy terrain, dunes, sandstone boundary blocks, small palm oases, rocks, cacti, a camp, camels, a desert traveler bonus human, and a collidable pyramid
 - Detailed UFO with metal rivets, glass dome, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave summaries and score bonuses

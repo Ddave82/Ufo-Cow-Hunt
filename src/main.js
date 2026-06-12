@@ -90,6 +90,11 @@ const tempVector2 = new THREE.Vector3();
 const worldSize = 170;
 const halfWorld = worldSize / 2;
 const terrainSegments = 112;
+const desertPyramid = { x: 21, z: -10, radius: 17, plateauRadius: 20, blendRadius: 28, baseHeight: 0.8 };
+const desertOases = [
+  { x: -48, z: 20, rx: 7.2, rz: 4.2 },
+  { x: 54, z: 44, rx: 5.8, rz: 3.4 }
+];
 const farmWaterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
@@ -100,7 +105,8 @@ const farmSpawnBlockers = [
 ];
 const desertSpawnBlockers = [
   { x: -52, z: 47, rx: 9, rz: 7 },
-  { x: 21, z: -10, rx: 17, rz: 17 }
+  { x: desertPyramid.x, z: desertPyramid.z, rx: desertPyramid.radius, rz: desertPyramid.radius },
+  ...desertOases.map((oasis) => ({ x: oasis.x, z: oasis.z, rx: oasis.rx + 4, rz: oasis.rz + 4 }))
 ];
 const farmAnimalSpawnZones = [
   { x: 22, z: 27, width: 34, depth: 24 },
@@ -207,7 +213,7 @@ const levelConfigs = {
     water: desertWaterBodies,
     blockers: desertSpawnBlockers,
     colliders: [
-      { x: 21, z: -10, radius: 17, label: "pyramid" }
+      { x: desertPyramid.x, z: desertPyramid.z, radius: desertPyramid.radius, label: "pyramid" }
     ],
     powerupSpots: [
       [-54, 50],
@@ -712,6 +718,7 @@ function desertTerrainHeight(x, z) {
   const water = isWater(x, z);
   const lakeSink = water ? -1.25 : 0;
   const shoreLift = shoreAmount(x, z) * 0.32;
+  const pyramidDistance = Math.hypot(x - desertPyramid.x, z - desertPyramid.z);
   const dune =
     Math.sin(x * 0.052 + z * 0.018) * 2.6 +
     Math.cos(z * 0.046 - x * 0.021) * 2.3 +
@@ -720,6 +727,15 @@ function desertTerrainHeight(x, z) {
     desertRidgeAmount(x, z) * 3.2 +
     shoreLift +
     lakeSink;
+
+  if (pyramidDistance < desertPyramid.plateauRadius) {
+    return desertPyramid.baseHeight;
+  }
+
+  if (pyramidDistance < desertPyramid.blendRadius) {
+    const blend = (pyramidDistance - desertPyramid.plateauRadius) / (desertPyramid.blendRadius - desertPyramid.plateauRadius);
+    return THREE.MathUtils.lerp(desertPyramid.baseHeight, Math.max(dune, -0.46), THREE.MathUtils.smoothstep(blend, 0, 1));
+  }
 
   if (water) return dune;
   return Math.max(dune, -0.46);
@@ -903,7 +919,7 @@ function addLandscapeDetails() {
   if (activeLevelId === "desert") {
     addDesertLighting();
     addDesertGroundDetails();
-    addBoundaryFence();
+    addDesertBoundaryBlocks();
     addDesertDetails();
     addRocks();
     addClouds();
@@ -964,15 +980,65 @@ function addDesertLighting() {
 
 function addDesertDetails() {
   addPyramid();
+  addDesertOases();
   addDesertCamp();
   addCacti();
   addDryShrubs();
   addDesertMarkers();
 }
 
+function addDesertBoundaryBlocks() {
+  const blockMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb8874d,
+    emissive: 0x2b1809,
+    emissiveIntensity: 0.12,
+    roughness: 0.94
+  });
+  const capMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd1a15e,
+    emissive: 0x321b08,
+    emissiveIntensity: 0.11,
+    roughness: 0.9
+  });
+  const blockGeometry = new THREE.BoxGeometry(4.8, 1.0, 1.45);
+  const capGeometry = new THREE.BoxGeometry(3.2, 1.25, 1.6);
+  const group = new THREE.Group();
+  const inset = 4.5;
+  const fenceHalf = halfWorld - inset;
+  const spacing = 7.2;
+  const sides = [
+    { start: [-fenceHalf, -fenceHalf], end: [fenceHalf, -fenceHalf], angle: 0 },
+    { start: [-fenceHalf, fenceHalf], end: [fenceHalf, fenceHalf], angle: 0 },
+    { start: [-fenceHalf, -fenceHalf], end: [-fenceHalf, fenceHalf], angle: Math.PI / 2 },
+    { start: [fenceHalf, -fenceHalf], end: [fenceHalf, fenceHalf], angle: Math.PI / 2 }
+  ];
+
+  sides.forEach((side, sideIndex) => {
+    const [x1, z1] = side.start;
+    const [x2, z2] = side.end;
+    const length = Math.hypot(x2 - x1, z2 - z1);
+    const count = Math.floor(length / spacing);
+    for (let i = 0; i <= count; i += 1) {
+      const t = i / count;
+      const x = THREE.MathUtils.lerp(x1, x2, t);
+      const z = THREE.MathUtils.lerp(z1, z2, t);
+      const isCap = i % 5 === 0;
+      const block = new THREE.Mesh(isCap ? capGeometry : blockGeometry, isCap ? capMaterial : blockMaterial);
+      block.position.set(x, terrainHeight(x, z) + (isCap ? 0.62 : 0.5), z);
+      block.rotation.y = side.angle + Math.sin((i + sideIndex) * 1.7) * 0.05;
+      block.scale.set(0.9 + ((i + sideIndex) % 3) * 0.08, 0.78 + (i % 2) * 0.16, 0.86);
+      block.castShadow = true;
+      block.receiveShadow = true;
+      group.add(block);
+    }
+  });
+
+  addLevelObject(group);
+}
+
 function addPyramid() {
-  const x = 21;
-  const z = -10;
+  const x = desertPyramid.x;
+  const z = desertPyramid.z;
   const baseY = terrainHeight(x, z);
   const group = new THREE.Group();
   const sandStone = new THREE.MeshStandardMaterial({
@@ -994,6 +1060,13 @@ function addPyramid() {
   pyramid.castShadow = true;
   pyramid.receiveShadow = true;
 
+  const foundation = new THREE.Mesh(new THREE.BoxGeometry(23.5, 1.4, 23.5), darkStone);
+  foundation.rotation.y = Math.PI / 4;
+  foundation.position.y = 0.28;
+  foundation.scale.y = 0.55;
+  foundation.castShadow = true;
+  foundation.receiveShadow = true;
+
   const entrance = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.1, 0.18), darkStone);
   entrance.position.set(0, 2, -7.8);
   entrance.rotation.x = -0.18;
@@ -1003,7 +1076,7 @@ function addPyramid() {
   cap.position.y = 21.4;
   cap.castShadow = true;
 
-  group.add(pyramid, entrance, cap);
+  group.add(foundation, pyramid, entrance, cap);
   group.position.set(x, baseY, z);
   group.name = "desert-collision-pyramid";
   addLevelObject(group);
@@ -1021,6 +1094,84 @@ function addPyramid() {
   shadow.position.set(x, baseY + 0.08, z);
   shadow.scale.set(1.15, 0.78, 1);
   addLevelObject(shadow);
+}
+
+function addDesertOases() {
+  const waterMaterial = new THREE.MeshStandardMaterial({
+    color: 0x16839c,
+    emissive: 0x0a809b,
+    emissiveIntensity: 0.34,
+    roughness: 0.24,
+    metalness: 0.08,
+    transparent: true,
+    opacity: 0.82
+  });
+  const shoreMaterial = new THREE.MeshBasicMaterial({
+    color: 0x7b5a33,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+
+  desertOases.forEach((oasis, index) => {
+    const y = terrainHeight(oasis.x, oasis.z);
+    const shore = new THREE.Mesh(new THREE.CircleGeometry(1, 42), shoreMaterial);
+    shore.rotation.x = -Math.PI / 2;
+    shore.position.set(oasis.x, y + 0.07, oasis.z);
+    shore.scale.set(oasis.rx * 1.55, oasis.rz * 1.65, 1);
+    addLevelObject(shore);
+
+    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 42), waterMaterial);
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(oasis.x, y + 0.12, oasis.z);
+    water.scale.set(oasis.rx, oasis.rz, 1);
+    water.receiveShadow = true;
+    water.name = `desert-oasis-${index}`;
+    water.userData = { waveOffset: index * 1.2 };
+    waterSurfaces.push(water);
+    addLevelObject(water);
+
+    for (let palm = 0; palm < 5; palm += 1) {
+      const angle = palm * 1.256 + index * 0.8;
+      const px = oasis.x + Math.cos(angle) * oasis.rx * 1.55;
+      const pz = oasis.z + Math.sin(angle) * oasis.rz * 1.75;
+      addPalmTree(px, pz, angle, 0.82 + (palm % 3) * 0.1);
+    }
+  });
+}
+
+function addPalmTree(x, z, angle, scale = 1) {
+  const spot = findDryObjectSpot(x, z, 2.5, Math.floor((x + z) * 3));
+  const group = new THREE.Group();
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x7b4a25, roughness: 0.9 });
+  const leafMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1f7d55,
+    emissive: 0x062415,
+    emissiveIntensity: 0.08,
+    roughness: 0.86
+  });
+
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 4.2, 7), trunkMaterial);
+  trunk.position.y = 2.1 * scale;
+  trunk.rotation.z = Math.sin(angle) * 0.16;
+  trunk.scale.set(scale, scale, scale);
+  trunk.castShadow = true;
+  group.add(trunk);
+
+  for (let i = 0; i < 7; i += 1) {
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.34, 3.5, 5), leafMaterial);
+    leaf.position.y = 4.25 * scale;
+    leaf.rotation.z = Math.PI / 2.25;
+    leaf.rotation.y = angle + (i / 7) * Math.PI * 2;
+    leaf.scale.set(scale, 0.58 * scale, scale);
+    leaf.castShadow = true;
+    group.add(leaf);
+  }
+
+  group.position.set(spot.x, terrainHeight(spot.x, spot.z), spot.z);
+  group.rotation.y = angle;
+  addLevelObject(group);
 }
 
 
