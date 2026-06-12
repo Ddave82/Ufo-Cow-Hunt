@@ -95,6 +95,13 @@ const desertOases = [
   { x: -48, z: 20, rx: 7.2, rz: 4.2 },
   { x: 54, z: 44, rx: 5.8, rz: 3.4 }
 ];
+const desertTentSites = [
+  { x: -52, z: 47, rotation: -0.35, scale: 1, seed: 610, cloth: 0xd6a45a },
+  { x: 65, z: -20, rotation: 0.48, scale: 0.82, seed: 627, cloth: 0xb75c42 },
+  { x: -30, z: -62, rotation: -0.9, scale: 0.76, seed: 644, cloth: 0xc98a48 },
+  { x: 42, z: 56, rotation: 0.2, scale: 0.7, seed: 661, cloth: 0xa85a4b },
+  { x: -68, z: -16, rotation: 0.72, scale: 0.64, seed: 678, cloth: 0xd0a15d }
+];
 const farmWaterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
@@ -104,7 +111,7 @@ const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 }
 ];
 const desertSpawnBlockers = [
-  { x: -52, z: 47, rx: 9, rz: 7 },
+  ...desertTentSites.map((site) => ({ x: site.x, z: site.z, rx: 7.5 * site.scale, rz: 5.5 * site.scale })),
   { x: desertPyramid.x, z: desertPyramid.z, rx: desertPyramid.radius, rz: desertPyramid.radius },
   ...desertOases.map((oasis) => ({ x: oasis.x, z: oasis.z, rx: oasis.rx + 4, rz: oasis.rz + 4 }))
 ];
@@ -1061,10 +1068,9 @@ function addPyramid() {
   pyramid.castShadow = true;
   pyramid.receiveShadow = true;
 
-  const foundation = new THREE.Mesh(new THREE.BoxGeometry(23.5, 1.4, 23.5), darkStone);
+  const foundation = new THREE.Mesh(new THREE.CylinderGeometry(15.9, 16.4, 0.55, 4), darkStone);
   foundation.rotation.y = Math.PI / 4;
-  foundation.position.y = 0.28;
-  foundation.scale.y = 0.55;
+  foundation.position.y = 0.02;
   foundation.castShadow = true;
   foundation.receiveShadow = true;
 
@@ -1177,10 +1183,16 @@ function addPalmTree(x, z, angle, scale = 1) {
 
 
 function addDesertCamp() {
-  const spot = findDryObjectSpot(-52, 47, 9, 610);
+  desertTentSites.forEach((site) => {
+    addBedouinTent(site);
+  });
+}
+
+function addBedouinTent(site) {
+  const spot = findDryObjectSpot(site.x, site.z, 6.5 * site.scale, site.seed);
   const group = new THREE.Group();
   const cloth = new THREE.MeshStandardMaterial({
-    color: 0xd6a45a,
+    color: site.cloth,
     emissive: 0x241006,
     roughness: 0.86
   });
@@ -1218,9 +1230,23 @@ function addDesertCamp() {
   const glow = new THREE.PointLight(0xffa95c, 1.2, 13, 1.8);
   glow.position.copy(lamp.position);
 
-  group.add(rug, tent, lamp, glow);
+  const shade = new THREE.Mesh(
+    new THREE.CircleGeometry(3.2, 22),
+    new THREE.MeshBasicMaterial({
+      color: 0x3a1b0c,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false
+    })
+  );
+  shade.rotation.x = -Math.PI / 2;
+  shade.position.set(0.2, 0.045, 0.4);
+  shade.scale.set(1.45, 0.58, 1);
+
+  group.add(shade, rug, tent, lamp, glow);
+  group.scale.setScalar(site.scale);
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.04, spot.z);
-  group.rotation.y = -0.35;
+  group.rotation.y = site.rotation;
   addLevelObject(group);
 }
 
