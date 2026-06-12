@@ -162,8 +162,8 @@ const hazards = [];
 const waterSurfaces = [];
 const waterRipples = [];
 const waveConfigs = [
-  { number: 1, cowGoal: 10, bonus: 500, timeLimit: 100 },
-  { number: 2, cowGoal: 15, bonus: 750, timeLimit: 120 },
+  { number: 1, cowGoal: 10, bonus: 500, timeLimit: 95 },
+  { number: 2, cowGoal: 15, bonus: 750, timeLimit: 115 },
   { number: 3, cowGoal: 20, bonus: 1000, timeLimit: 135 }
 ];
 const maxWaveCows = Math.max(...waveConfigs.map((wave) => wave.cowGoal));
@@ -181,7 +181,7 @@ const levelConfigs = {
     objectiveCopy: "Fly the UFO, abduct every cow, avoid search drones, and keep your beam charged with energy diamonds.",
     beamTip: "Hover over cows or bonus targets.",
     animalTip: "Beam them up for points.",
-    waveTip: "Timed waves: 10 in 1:40, 15 in 2:00, 20 in 2:15.",
+    waveTip: "Timed waves: 10 in 1:35, 15 in 1:55, 20 in 2:15.",
     waveStartHint: "Collect every cow to advance.",
     calmText: "Rare bonus hidden",
     alarmText: "Farm alarm!",
@@ -215,7 +215,7 @@ const levelConfigs = {
     objectiveCopy: "Fly the UFO across dunes, abduct every camel, dodge search drones, and recharge with energy diamonds.",
     beamTip: "Hover over camels or bonus travelers.",
     animalTip: "Beam them up for points.",
-    waveTip: "Timed waves: 10 in 1:40, 15 in 2:00, 20 in 2:15.",
+    waveTip: "Timed waves: 10 in 1:35, 15 in 1:55, 20 in 2:15.",
     waveStartHint: "Collect every camel to advance.",
     calmText: "Traveler hidden",
     alarmText: "Desert alarm!",
@@ -482,6 +482,8 @@ function playAgain() {
   levelScreenNode.classList.add("hidden");
   startScreenNode.classList.add("hidden");
   endScreenNode.classList.add("hidden");
+  gameStarted = false;
+  gameWon = false;
   startGame();
 }
 
@@ -4008,7 +4010,7 @@ function setupCountdownSound() {
 
 function updateCountdownVolume() {
   if (!countdownAudio) return;
-  countdownAudio.volume = soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 0.95, 0, 1);
+  countdownAudio.volume = soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 1.15, 0, 1);
 }
 
 function playCountdownSound() {

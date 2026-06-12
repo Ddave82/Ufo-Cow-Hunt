@@ -19,8 +19,8 @@ You control a UFO across selectable mission zones. The current levels are Farm N
 
 Each mission is split into three waves in the same selected level:
 
-- Wave 1: abduct 10 animals in 1:40
-- Wave 2: abduct 15 animals in 2:00
+- Wave 1: abduct 10 animals in 1:35
+- Wave 2: abduct 15 animals in 1:55
 - Wave 3: abduct 20 animals in 2:15
 
 Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the next wave starts and only the points collected in time count. After Wave 3 is cleared in time, the UFO blasts into the sky and the takeoff sound plays; if Wave 3 times out, the final score is locked with the points collected so far.
