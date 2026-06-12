@@ -1286,46 +1286,205 @@ function addIceDetails() {
   addIceOutpost();
   addIcebergs();
   addSnowPines();
+  addPolarBears();
   addIceCrystals();
 }
 
 function addIceOutpost() {
   const spot = findDryObjectSpot(iceOutpost.x, iceOutpost.z, 9, 830);
   const group = new THREE.Group();
-  const snow = new THREE.MeshStandardMaterial({
-    color: 0xe6f8ff,
-    emissive: 0x15384a,
-    emissiveIntensity: 0.12,
-    roughness: 0.72
-  });
-  const blue = new THREE.MeshStandardMaterial({
-    color: 0x7fcff0,
-    emissive: 0x11364d,
-    emissiveIntensity: 0.18,
+  const iceBlock = new THREE.MeshStandardMaterial({
+    color: 0xd6f7ff,
+    emissive: 0x1d566b,
+    emissiveIntensity: 0.15,
     roughness: 0.54,
     transparent: true,
-    opacity: 0.88
+    opacity: 0.94
   });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x263447, roughness: 0.8 });
+  const iceCap = new THREE.MeshStandardMaterial({
+    color: 0xf1feff,
+    emissive: 0x1d485d,
+    emissiveIntensity: 0.1,
+    roughness: 0.62
+  });
+  const dark = new THREE.MeshStandardMaterial({
+    color: 0x101b27,
+    emissive: 0x03070c,
+    roughness: 0.9
+  });
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x9df7ff,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false
+  });
+  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
 
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(3.4, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), snow);
-  dome.scale.set(1.25, 0.75, 1);
-  dome.position.y = 1.2;
-  dome.castShadow = true;
-  dome.receiveShadow = true;
+  const makeBlock = (x, y, z, sx, sy, sz, rotationY = 0, material = iceBlock) => {
+    const block = new THREE.Mesh(blockGeometry, material);
+    block.position.set(x, y, z);
+    block.scale.set(sx, sy, sz);
+    block.rotation.y = rotationY;
+    block.castShadow = true;
+    block.receiveShadow = true;
+    group.add(block);
+    return block;
+  };
 
-  const entrance = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.35, 0.18), dark);
-  entrance.position.set(0, 0.8, -3.42);
+  const layers = [
+    { radius: 3.25, y: 0.42, count: 18, height: 0.62 },
+    { radius: 2.85, y: 0.95, count: 16, height: 0.58 },
+    { radius: 2.35, y: 1.43, count: 14, height: 0.54 },
+    { radius: 1.82, y: 1.85, count: 11, height: 0.48 },
+    { radius: 1.22, y: 2.17, count: 8, height: 0.38 }
+  ];
 
-  const window = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.42, 0.12), blue);
-  window.position.set(-1.25, 1.25, -3.08);
+  layers.forEach((layer, layerIndex) => {
+    for (let i = 0; i < layer.count; i += 1) {
+      const angle = (i / layer.count) * Math.PI * 2 + layerIndex * 0.16;
+      const frontGap = Math.abs(Math.atan2(Math.sin(angle - Math.PI), Math.cos(angle - Math.PI)));
+      if (frontGap < 0.34 && layerIndex < 3) continue;
+      const x = Math.sin(angle) * layer.radius;
+      const z = Math.cos(angle) * layer.radius;
+      const width = (Math.PI * 2 * layer.radius) / layer.count * 0.78;
+      makeBlock(x, layer.y, z, width, layer.height, 0.52, angle);
+    }
+  });
 
-  const lamp = new THREE.PointLight(0x91eaff, 1.25, 13, 1.9);
-  lamp.position.set(0, 2.1, -3.2);
-  group.add(dome, entrance, window, lamp);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.06, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), iceCap);
+  cap.position.y = 2.42;
+  cap.scale.set(1.0, 0.48, 0.9);
+  cap.castShadow = true;
+  cap.receiveShadow = true;
+
+  const portal = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 0.74, 6, 12), dark);
+  portal.position.set(0, 0.82, -3.02);
+  portal.scale.set(1.0, 1.0, 0.18);
+  portal.castShadow = true;
+
+  makeBlock(-0.72, 0.48, -3.12, 0.34, 0.78, 0.5, -0.16);
+  makeBlock(0.72, 0.48, -3.12, 0.34, 0.78, 0.5, 0.16);
+  makeBlock(-0.5, 1.14, -3.15, 0.42, 0.34, 0.48, -0.54);
+  makeBlock(0, 1.32, -3.15, 0.5, 0.32, 0.48, 0);
+  makeBlock(0.5, 1.14, -3.15, 0.42, 0.34, 0.48, 0.54);
+
+  const threshold = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.1, 0.84), iceCap);
+  threshold.position.set(0, 0.08, -3.34);
+  threshold.castShadow = true;
+  threshold.receiveShadow = true;
+
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.58, 18), glowMaterial);
+  glow.position.set(0, 0.85, -3.21);
+  glow.rotation.y = Math.PI;
+
+  const lamp = new THREE.PointLight(0x91eaff, 1.55, 15, 1.9);
+  lamp.position.set(0, 1.55, -3.0);
+  group.add(cap, portal, threshold, glow, lamp);
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.02, spot.z);
   group.rotation.y = -0.45;
   addLevelObject(group);
+}
+
+function addPolarBears() {
+  [
+    [-28, -48, 0.58],
+    [26, 56, -0.36],
+    [58, -20, -1.12],
+    [-66, 22, 0.24],
+    [12, -12, 1.94],
+    [40, 12, -2.32],
+    [-16, 34, 2.64]
+  ].forEach(([x, z, rotation], index) => {
+    const spot = findDryObjectSpot(x, z, 6.5, 920 + index);
+    const bear = createPolarBear(index);
+    bear.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.08, spot.z);
+    bear.rotation.y = rotation;
+    bear.scale.setScalar(1.22 + (index % 3) * 0.1);
+    addLevelObject(bear);
+  });
+}
+
+function createPolarBear(index) {
+  const group = new THREE.Group();
+  const fur = new THREE.MeshStandardMaterial({
+    color: index % 2 === 0 ? 0xfffbec : 0xe4f4f6,
+    emissive: 0x102a38,
+    emissiveIntensity: 0.08,
+    roughness: 0.78
+  });
+  const shadowFur = new THREE.MeshStandardMaterial({
+    color: 0xb9d1da,
+    emissive: 0x0a2431,
+    emissiveIntensity: 0.08,
+    roughness: 0.82
+  });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x141a1f, roughness: 0.82 });
+  const groundShadow = new THREE.MeshBasicMaterial({
+    color: 0x14364a,
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.55, 22), groundShadow);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0.32, 0.035, 0);
+  shadow.scale.set(1.35, 0.58, 1);
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.72, 0.78), fur);
+  body.position.y = 0.88;
+  body.castShadow = true;
+  body.receiveShadow = true;
+
+  const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.82, 0.86), fur);
+  shoulder.position.set(0.62, 1.0, 0);
+  shoulder.castShadow = true;
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.48, 0.5), fur);
+  head.position.set(1.46, 1.1, 0);
+  head.castShadow = true;
+
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.32), shadowFur);
+  snout.position.set(1.92, 1.03, 0);
+  snout.castShadow = true;
+
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, 0.18), dark);
+  nose.position.set(2.12, 1.06, 0);
+
+  for (const z of [-0.17, 0.17]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), fur);
+    ear.position.set(1.34, 1.38, z);
+    ear.scale.set(0.8, 1.0, 0.7);
+    group.add(ear);
+
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 5), dark);
+    eye.position.set(1.82, 1.18, z * 0.72);
+    group.add(eye);
+  }
+
+  const legGeometry = new THREE.BoxGeometry(0.26, 0.68, 0.24);
+  for (const x of [-0.72, 0.12, 0.82, 1.16]) {
+    const side = x === -0.72 || x === 0.82 ? -0.24 : 0.24;
+    const leg = new THREE.Mesh(legGeometry, x < 0 ? shadowFur : fur);
+    leg.position.set(x, 0.38, side);
+    leg.rotation.z = x < 0 ? -0.08 : 0.08;
+    leg.castShadow = true;
+    group.add(leg);
+
+    const paw = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.3), dark);
+    paw.position.set(x + 0.06, 0.08, side);
+    paw.castShadow = true;
+    group.add(paw);
+  }
+
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), fur);
+  tail.position.set(-1.22, 0.95, 0);
+  tail.scale.set(0.75, 0.75, 0.75);
+
+  group.add(shadow, body, shoulder, head, snout, nose, tail);
+  group.scale.setScalar(1.18);
+  return group;
 }
 
 function addIcebergs() {

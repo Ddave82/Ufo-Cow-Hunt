@@ -31,7 +31,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 - Level selection with Farm Night, Desert Hunt, and Ice Drift
 - Farm Night with fields, ponds, trees, fences, hay bales, cows, and a rare bonus human
 - Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
-- Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, glowing crystals, penguins, and a polar explorer bonus human
+- Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, penguins, and a polar explorer bonus human
 - Detailed UFO with metal rivets, glass dome, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
