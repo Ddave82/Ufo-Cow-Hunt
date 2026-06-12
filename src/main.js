@@ -268,17 +268,17 @@ const levelConfigs = {
   ice: {
     id: "ice",
     displayName: "Ice Drift",
-    cardTitle: "Ice / Penguin Hunt",
+    cardTitle: "Ice / Polar Bear Hunt",
     kicker: "Frozen ridge abduction run",
     previewClass: "ice",
-    animalSingular: "penguin",
-    animalPlural: "penguins",
-    animalTitle: "Penguins",
-    objectiveCopy: "Fly the UFO over frozen lakes, abduct every penguin, avoid search drones, and recharge with energy diamonds.",
-    beamTip: "Hover over penguins or the bonus explorer.",
+    animalSingular: "polar bear",
+    animalPlural: "polar bears",
+    animalTitle: "Polar Bears",
+    objectiveCopy: "Fly the UFO over frozen lakes, abduct every polar bear, avoid search drones, and recharge with energy diamonds.",
+    beamTip: "Hover over polar bears or the bonus explorer.",
     animalTip: "Beam them up for points.",
     waveTip: "Timed waves: 10 in 1:35, 15 in 1:55, 20 in 2:15.",
-    waveStartHint: "Collect every penguin to advance.",
+    waveStartHint: "Collect every polar bear to advance.",
     calmText: "Explorer hidden",
     alarmText: "Ice alarm!",
     animalSpots: iceAnimalSpawnZones,
@@ -1286,7 +1286,6 @@ function addIceDetails() {
   addIceOutpost();
   addIcebergs();
   addSnowPines();
-  addPolarBears();
   addIceCrystals();
 }
 
@@ -1383,25 +1382,6 @@ function addIceOutpost() {
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.02, spot.z);
   group.rotation.y = -0.45;
   addLevelObject(group);
-}
-
-function addPolarBears() {
-  [
-    [-28, -48, 0.58],
-    [26, 56, -0.36],
-    [58, -20, -1.12],
-    [-66, 22, 0.24],
-    [12, -12, 1.94],
-    [40, 12, -2.32],
-    [-16, 34, 2.64]
-  ].forEach(([x, z, rotation], index) => {
-    const spot = findDryObjectSpot(x, z, 6.5, 920 + index);
-    const bear = createPolarBear(index);
-    bear.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.08, spot.z);
-    bear.rotation.y = rotation;
-    bear.scale.setScalar(1.22 + (index % 3) * 0.1);
-    addLevelObject(bear);
-  });
 }
 
 function createPolarBear(index) {
@@ -2967,14 +2947,14 @@ function isSpawnCandidateSafe(x, z, used, minDistance) {
 }
 
 function collectibleBaseHeight(type, x, z) {
-  if (type === "animal") return maxTerrainHeightAround(x, z, activeLevelId === "desert" ? 1.7 : activeLevelId === "ice" ? 1.2 : 1.45) + 0.12;
+  if (type === "animal") return maxTerrainHeightAround(x, z, activeLevelId === "desert" ? 1.7 : activeLevelId === "ice" ? 2.1 : 1.45) + 0.12;
   if (type === "bonus") return maxTerrainHeightAround(x, z, 0.8) + 0.08;
   return terrainHeight(x, z);
 }
 
 function createAnimal(index) {
   if (activeLevelId === "desert") return createCamel(index);
-  if (activeLevelId === "ice") return createPenguin(index);
+  if (activeLevelId === "ice") return createPolarBear(index);
   return createCow(index);
 }
 
@@ -3100,72 +3080,6 @@ function createCamel(index) {
 
   group.add(body, hump, neck, head, snout, saddleBlanket);
   group.scale.setScalar(1.22);
-  return group;
-}
-
-function createPenguin(index) {
-  const group = new THREE.Group();
-  const black = new THREE.MeshStandardMaterial({
-    color: 0x111821,
-    emissive: 0x02080d,
-    roughness: 0.72
-  });
-  const white = new THREE.MeshStandardMaterial({
-    color: 0xf2fbff,
-    roughness: 0.62
-  });
-  const orange = new THREE.MeshStandardMaterial({
-    color: index % 2 === 0 ? 0xffa03d : 0xffc54f,
-    roughness: 0.66
-  });
-  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x9ffcff });
-
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 0.78, 6, 14), black);
-  body.position.y = 0.9;
-  body.scale.set(0.88, 1.1, 0.72);
-  body.castShadow = true;
-
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.38, 16, 10), white);
-  belly.position.set(0.16, 0.82, 0);
-  belly.scale.set(0.42, 0.78, 0.62);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), black);
-  head.position.set(0.05, 1.65, 0);
-  head.castShadow = true;
-
-  const face = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 8), white);
-  face.position.set(0.22, 1.64, 0);
-  face.scale.set(0.32, 0.54, 0.64);
-
-  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.34, 8), orange);
-  beak.position.set(0.42, 1.62, 0);
-  beak.rotation.z = -Math.PI / 2;
-
-  for (const z of [-0.11, 0.11]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), eyeMaterial);
-    eye.position.set(0.34, 1.73, z);
-    group.add(eye);
-  }
-
-  const wingGeometry = new THREE.ConeGeometry(0.12, 0.58, 6);
-  for (const z of [-0.42, 0.42]) {
-    const wing = new THREE.Mesh(wingGeometry, black);
-    wing.position.set(-0.04, 0.95, z);
-    wing.rotation.x = z < 0 ? 0.58 : -0.58;
-    wing.rotation.z = 0.36;
-    wing.castShadow = true;
-    group.add(wing);
-  }
-
-  for (const z of [-0.18, 0.18]) {
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.18), orange);
-    foot.position.set(0.22, 0.12, z);
-    foot.rotation.y = z < 0 ? -0.18 : 0.18;
-    group.add(foot);
-  }
-
-  group.add(body, belly, head, face, beak);
-  group.scale.setScalar(1.18);
   return group;
 }
 

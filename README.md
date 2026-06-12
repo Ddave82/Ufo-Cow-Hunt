@@ -15,7 +15,7 @@ A small 3D browser game built with Three.js: fly a UFO across stylized low-poly 
 
 ## Gameplay
 
-You control a UFO across selectable mission zones. The current levels are Farm Night with cows, Desert Hunt with camels, and Ice Drift with penguins. Animals give points, a rare bonus human, traveler, or explorer gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger loud alarms, flash the HUD, slow the UFO, and drain beam energy when they lock onto you.
+You control a UFO across selectable mission zones. The current levels are Farm Night with cows, Desert Hunt with camels, and Ice Drift with polar bears. Animals give points, a rare bonus human, traveler, or explorer gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger loud alarms, flash the HUD, slow the UFO, and drain beam energy when they lock onto you.
 
 Each mission is split into three waves in the same selected level:
 
@@ -31,7 +31,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 - Level selection with Farm Night, Desert Hunt, and Ice Drift
 - Farm Night with fields, ponds, trees, fences, hay bales, cows, and a rare bonus human
 - Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
-- Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, penguins, and a polar explorer bonus human
+- Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, and a polar explorer bonus human
 - Detailed UFO with metal rivets, glass dome, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
