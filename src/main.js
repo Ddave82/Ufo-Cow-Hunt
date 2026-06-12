@@ -94,14 +94,13 @@ const farmWaterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
 ];
-const desertWaterBodies = [
-  { x: -42, z: 18, rx: 11.5, rz: 7.2 }
-];
+const desertWaterBodies = [];
 const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 }
 ];
 const desertSpawnBlockers = [
-  { x: -52, z: 47, rx: 9, rz: 7 }
+  { x: -52, z: 47, rx: 9, rz: 7 },
+  { x: 21, z: -10, rx: 17, rz: 17 }
 ];
 const farmAnimalSpawnZones = [
   { x: 22, z: 27, width: 34, depth: 24 },
@@ -173,6 +172,7 @@ const levelConfigs = {
     bonusSpots: farmBonusSpawnZones,
     water: farmWaterBodies,
     blockers: farmSpawnBlockers,
+    colliders: [],
     powerupSpots: [
       [-62, 60],
       [50, 36],
@@ -206,6 +206,9 @@ const levelConfigs = {
     bonusSpots: desertBonusSpawnZones,
     water: desertWaterBodies,
     blockers: desertSpawnBlockers,
+    colliders: [
+      { x: 21, z: -10, radius: 17, label: "pyramid" }
+    ],
     powerupSpots: [
       [-54, 50],
       [42, 30],
@@ -257,6 +260,7 @@ let beamPreviewAudio = null;
 let takeoffAudio = null;
 let lastAlertSound = 0;
 let lastNoPowerFeedback = -Infinity;
+let lastCollisionFeedback = -Infinity;
 let missionStartTime = 0;
 let missionEndTime = 0;
 let takeoffUntil = 0;
@@ -641,13 +645,11 @@ function createTerrain() {
       Math.sin((x - z) * 0.61) * 0.008;
     if (activeLevelId === "desert") {
       const dune = desertDuneAmount(x, z);
-      const sandLight = 0.31 + height * 0.012 + dune * 0.08 + detail * 0.65;
-      color.setHSL(0.105 + Math.sin(x * 0.025) * 0.01, 0.56, sandLight);
-      if (path > 0.2) color.setHSL(0.09, 0.42, 0.27 + path * 0.045 + detail * 0.2);
-      if (shore > 0.08) color.setHSL(0.12, 0.36, 0.25 + shore * 0.09);
-      if (ridge > 0.42) color.setHSL(0.08, 0.38, 0.31 + ridge * 0.08 + detail * 0.2);
-      if (height > 5.4) color.setHSL(0.075, 0.36, 0.36 + height * 0.006);
-      if (water) color.setHSL(0.51, 0.62, 0.19 + Math.max(0, shore) * 0.03);
+      const sandLight = THREE.MathUtils.clamp(0.45 + height * 0.007 + dune * 0.12 + detail * 0.72, 0.32, 0.68);
+      color.setHSL(0.105 + Math.sin(x * 0.025) * 0.012, 0.72, sandLight);
+      if (path > 0.2) color.setHSL(0.095, 0.58, 0.38 + path * 0.055 + detail * 0.2);
+      if (ridge > 0.42) color.setHSL(0.085, 0.55, 0.42 + ridge * 0.08 + detail * 0.2);
+      if (height > 5.4) color.setHSL(0.075, 0.48, 0.46 + height * 0.006);
     } else {
       const meadow =
         0.19 +
@@ -672,7 +674,9 @@ function createTerrain() {
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: 0.96,
-    metalness: 0.02
+    metalness: 0.02,
+    emissive: activeLevelId === "desert" ? 0x4a2d12 : 0x000000,
+    emissiveIntensity: activeLevelId === "desert" ? 0.2 : 0
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -897,7 +901,7 @@ function addLights() {
 
 function addLandscapeDetails() {
   if (activeLevelId === "desert") {
-    addWater();
+    addDesertLighting();
     addDesertGroundDetails();
     addBoundaryFence();
     addDesertDetails();
@@ -949,12 +953,76 @@ function addDesertGroundDetails() {
   }
 }
 
+function addDesertLighting() {
+  const warmFill = new THREE.HemisphereLight(0xffc886, 0x3b1c12, 1.45);
+  const lowSun = new THREE.DirectionalLight(0xffb56f, 1.25);
+  lowSun.position.set(54, 42, 26);
+  lowSun.castShadow = true;
+  lowSun.shadow.mapSize.set(1024, 1024);
+  addLevelObject(warmFill, lowSun);
+}
+
 function addDesertDetails() {
+  addPyramid();
   addDesertCamp();
   addCacti();
   addDryShrubs();
   addDesertMarkers();
 }
+
+function addPyramid() {
+  const x = 21;
+  const z = -10;
+  const baseY = terrainHeight(x, z);
+  const group = new THREE.Group();
+  const sandStone = new THREE.MeshStandardMaterial({
+    color: 0xd9a65a,
+    emissive: 0x3f250c,
+    emissiveIntensity: 0.16,
+    roughness: 0.92
+  });
+  const darkStone = new THREE.MeshStandardMaterial({
+    color: 0x8a6536,
+    emissive: 0x1d1005,
+    emissiveIntensity: 0.08,
+    roughness: 0.96
+  });
+
+  const pyramid = new THREE.Mesh(new THREE.ConeGeometry(15.5, 21, 4), sandStone);
+  pyramid.rotation.y = Math.PI / 4;
+  pyramid.position.y = 10.5;
+  pyramid.castShadow = true;
+  pyramid.receiveShadow = true;
+
+  const entrance = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.1, 0.18), darkStone);
+  entrance.position.set(0, 2, -7.8);
+  entrance.rotation.x = -0.18;
+
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(2.15, 2.2, 4), darkStone);
+  cap.rotation.y = Math.PI / 4;
+  cap.position.y = 21.4;
+  cap.castShadow = true;
+
+  group.add(pyramid, entrance, cap);
+  group.position.set(x, baseY, z);
+  group.name = "desert-collision-pyramid";
+  addLevelObject(group);
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(17, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0x3a1b0c,
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false
+    })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(x, baseY + 0.08, z);
+  shadow.scale.set(1.15, 0.78, 1);
+  addLevelObject(shadow);
+}
+
 
 function addDesertCamp() {
   const spot = findDryObjectSpot(-52, 47, 9, 610);
@@ -2615,6 +2683,7 @@ function updateUfo(delta, elapsed) {
   ufo.group.position.addScaledVector(ufoState.velocity, delta);
   ufo.group.position.x = THREE.MathUtils.clamp(ufo.group.position.x, -halfWorld + 6, halfWorld - 6);
   ufo.group.position.z = THREE.MathUtils.clamp(ufo.group.position.z, -halfWorld + 6, halfWorld - 6);
+  handleUfoCollisions();
 
   const ground = terrainHeight(ufo.group.position.x, ufo.group.position.z);
   const desiredY = ground + 10.6 + Math.sin(elapsed * 2.3) * 0.44;
@@ -2630,6 +2699,34 @@ function updateUfo(delta, elapsed) {
   ufo.trail.scale.set(1, boosting ? 1.75 : 0.9 + ufoState.velocity.length() * 0.02, 1);
   ufo.trail.material.opacity = boosting ? 0.38 : 0.2;
   ufo.engineGlow.intensity = boosting ? 10 : 5.2 + ufoState.velocity.length() * 0.12;
+}
+
+function handleUfoCollisions() {
+  const colliders = getActiveLevel().colliders || [];
+  for (const collider of colliders) {
+    const dx = ufo.group.position.x - collider.x;
+    const dz = ufo.group.position.z - collider.z;
+    const distance = Math.hypot(dx, dz);
+    if (distance <= 0.001 || distance >= collider.radius) continue;
+
+    const pushX = dx / distance;
+    const pushZ = dz / distance;
+    ufo.group.position.x = collider.x + pushX * collider.radius;
+    ufo.group.position.z = collider.z + pushZ * collider.radius;
+
+    const inwardSpeed = ufoState.velocity.x * pushX + ufoState.velocity.z * pushZ;
+    if (inwardSpeed < 0) {
+      ufoState.velocity.x -= pushX * inwardSpeed * 1.25;
+      ufoState.velocity.z -= pushZ * inwardSpeed * 1.25;
+    }
+    ufoState.velocity.multiplyScalar(0.42);
+    const elapsed = clock.elapsedTime;
+    if (elapsed - lastCollisionFeedback > 1.25) {
+      lastCollisionFeedback = elapsed;
+      flashMessage(`Collision: ${capitalize(collider.label)}`);
+      playNoPowerSound();
+    }
+  }
 }
 
 function updateTakeoff(delta, elapsed) {
