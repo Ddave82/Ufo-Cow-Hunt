@@ -2326,7 +2326,7 @@ function updateWaveTimer(elapsed) {
   }
 
   if (waveTimeRemaining <= 0) {
-    finishMission(elapsed, { completed: false });
+    timeoutWave(elapsed);
   }
 }
 
@@ -3457,6 +3457,48 @@ function completeWave(elapsed) {
       `WAVE ${nextWave.number} START`,
       `${getActiveLevel().animalPlural.toUpperCase()}: 0 / ${nextWave.cowGoal} - TIME ${formatTime(nextWave.timeLimit)}`,
       nextHint
+    );
+  }, 1350));
+  waveTransitionTimers.push(window.setTimeout(() => {
+    prepareWave(currentWaveIndex + 1);
+    startWaveTimer(clock.elapsedTime);
+    waveTransitionActive = false;
+    messageNode.classList.add("hidden");
+    messageNode.classList.remove("wave-message");
+    updateHud(true, clock.elapsedTime);
+  }, 2600));
+}
+
+function timeoutWave(elapsed) {
+  if (waveTransitionActive || gameWon) return;
+  const timedOutWave = getCurrentWaveConfig();
+  stopCountdownSound();
+  waveTimeRemaining = 0;
+  waveTransitionActive = true;
+  beamActive = false;
+  abductingTarget = null;
+  beam.visible = false;
+  updateBeamSound(false);
+  updateHud(true, elapsed);
+  showWaveMessage(
+    `WAVE ${timedOutWave.number} TIME UP`,
+    `SCORE: ${score.toLocaleString("en-US")}`,
+    `${waveCowsCollected} / ${waveCowGoal} collected`
+  );
+
+  if (currentWaveIndex >= waveConfigs.length - 1) {
+    waveTransitionTimers.push(window.setTimeout(() => {
+      finishMission(clock.elapsedTime, { completed: false });
+    }, 1800));
+    return;
+  }
+
+  const nextWave = waveConfigs[currentWaveIndex + 1];
+  waveTransitionTimers.push(window.setTimeout(() => {
+    showWaveMessage(
+      `WAVE ${nextWave.number} START`,
+      `${getActiveLevel().animalPlural.toUpperCase()}: 0 / ${nextWave.cowGoal} - TIME ${formatTime(nextWave.timeLimit)}`,
+      "Time is up, but the hunt continues."
     );
   }, 1350));
   waveTransitionTimers.push(window.setTimeout(() => {

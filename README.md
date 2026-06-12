@@ -23,7 +23,7 @@ Each mission is split into three waves in the same selected level:
 - Wave 2: abduct 15 animals in 2:00
 - Wave 3: abduct 20 animals in 2:15
 
-Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the mission ends and only the points collected up to that moment count. After Wave 3 is cleared in time, the UFO blasts into the sky, the takeoff sound plays, and your final time and score are shown.
+Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the next wave starts and only the points collected in time count. After Wave 3 is cleared in time, the UFO blasts into the sky and the takeoff sound plays; if Wave 3 times out, the final score is locked with the points collected so far.
 
 ## Features
 
@@ -86,6 +86,12 @@ http://127.0.0.1:5173/
 
 ```bash
 npm run build
+```
+
+Build specifically for GitHub Pages:
+
+```bash
+npm run build:pages
 ```
 
 Preview the production build:
