@@ -659,11 +659,11 @@ function createTerrain() {
       Math.sin((x - z) * 0.61) * 0.008;
     if (activeLevelId === "desert") {
       const dune = desertDuneAmount(x, z);
-      const sandLight = THREE.MathUtils.clamp(0.45 + height * 0.007 + dune * 0.12 + detail * 0.72, 0.32, 0.68);
-      color.setHSL(0.105 + Math.sin(x * 0.025) * 0.012, 0.72, sandLight);
-      if (path > 0.2) color.setHSL(0.095, 0.58, 0.38 + path * 0.055 + detail * 0.2);
-      if (ridge > 0.42) color.setHSL(0.085, 0.55, 0.42 + ridge * 0.08 + detail * 0.2);
-      if (height > 5.4) color.setHSL(0.075, 0.48, 0.46 + height * 0.006);
+      const sandLight = THREE.MathUtils.clamp(0.5 + height * 0.007 + dune * 0.13 + detail * 0.68, 0.38, 0.74);
+      color.setHSL(0.125 + Math.sin(x * 0.025) * 0.01, 0.84, sandLight);
+      if (path > 0.2) color.setHSL(0.11, 0.72, 0.44 + path * 0.06 + detail * 0.18);
+      if (ridge > 0.42) color.setHSL(0.1, 0.68, 0.46 + ridge * 0.085 + detail * 0.18);
+      if (height > 5.4) color.setHSL(0.095, 0.6, 0.5 + height * 0.006);
     } else {
       const meadow =
         0.19 +
@@ -689,8 +689,8 @@ function createTerrain() {
     vertexColors: true,
     roughness: 0.96,
     metalness: 0.02,
-    emissive: activeLevelId === "desert" ? 0x4a2d12 : 0x000000,
-    emissiveIntensity: activeLevelId === "desert" ? 0.2 : 0
+    emissive: activeLevelId === "desert" ? 0x6a4514 : 0x000000,
+    emissiveIntensity: activeLevelId === "desert" ? 0.24 : 0
   });
 
   const mesh = new THREE.Mesh(geometry, material);
