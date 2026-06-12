@@ -25,6 +25,16 @@ Each mission is split into three waves in the same selected level:
 
 Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the next wave starts and only the points collected in time count. After Wave 3 is cleared in time, the UFO blasts into the sky and the takeoff sound plays; if Wave 3 times out, the final score is locked with the points collected so far.
 
+The mission-complete screen shows the final score, mission time, score breakdown, and how many level animals were collected out of the total available across all three waves.
+
+## Difficulty
+
+Drone pressure can be changed in the settings menu:
+
+- Easy: no drones
+- Normal: 3 drones
+- Hard: 4 drones
+
 ## Features
 
 - Low-poly 3D landscapes with terrain, clouds, stars, moonlight, and level-specific props
