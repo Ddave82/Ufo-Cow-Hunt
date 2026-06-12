@@ -58,6 +58,7 @@ const settingsMusicVolumeNode = document.querySelector("#settings-music-volume")
 const startMusicVolumeValueNode = document.querySelector("#start-music-volume-value");
 const settingsMusicVolumeValueNode = document.querySelector("#settings-music-volume-value");
 const musicEnabledNode = document.querySelector("#music-enabled");
+const difficultyButtonNodes = [...document.querySelectorAll(".difficulty-button")];
 const playAgainButtonNode = document.querySelector("#play-again-button");
 const chooseLevelButtonNode = document.querySelector("#choose-level-button");
 
@@ -187,6 +188,11 @@ const powerups = [];
 const hazards = [];
 const waterSurfaces = [];
 const waterRipples = [];
+const difficultyConfigs = {
+  easy: { label: "Easy", droneCount: 0 },
+  normal: { label: "Normal", droneCount: 3 },
+  hard: { label: "Hard", droneCount: 4 }
+};
 const waveConfigs = [
   { number: 1, cowGoal: 10, bonus: 500, timeLimit: 95 },
   { number: 2, cowGoal: 15, bonus: 750, timeLimit: 115 },
@@ -226,7 +232,8 @@ const levelConfigs = {
     hazardSpots: [
       [24, 28, 17, 0.9],
       [48, -34, 19, -0.82],
-      [-50, 35, 16, 1.05]
+      [-50, 35, 16, 1.05],
+      [-34, -44, 15, -1.14]
     ]
   },
   desert: {
@@ -262,7 +269,8 @@ const levelConfigs = {
     hazardSpots: [
       [-23, 31, 18, 0.82],
       [48, -36, 20, -0.88],
-      [58, 14, 16, 1.05]
+      [58, 14, 16, 1.05],
+      [-58, -32, 15, -1.12]
     ]
   },
   ice: {
@@ -296,7 +304,8 @@ const levelConfigs = {
     hazardSpots: [
       [-22, 30, 17, 0.88],
       [44, -28, 19, -0.84],
-      [58, 34, 16, 1.08]
+      [58, 34, 16, 1.08],
+      [-54, -36, 15, -1.16]
     ]
   }
 };
@@ -330,6 +339,7 @@ let soundMuted = false;
 let effectsVolume = 1;
 let musicVolume = 0.9;
 let musicEnabled = true;
+let difficulty = readStoredDifficulty();
 let audio = null;
 let atmoAudio = null;
 let atmoTimer = null;
@@ -400,6 +410,9 @@ startVolumeNode?.addEventListener("input", () => setVolume(startVolumeNode.value
 settingsVolumeNode.addEventListener("input", () => setVolume(settingsVolumeNode.value, true));
 startMusicVolumeNode?.addEventListener("input", () => setMusicVolume(startMusicVolumeNode.value));
 settingsMusicVolumeNode.addEventListener("input", () => setMusicVolume(settingsMusicVolumeNode.value));
+difficultyButtonNodes.forEach((button) => {
+  button.addEventListener("click", () => setDifficulty(button.dataset.difficulty));
+});
 musicEnabledNode.addEventListener("change", () => {
   musicEnabled = musicEnabledNode.checked;
   updateMusicVolume();
@@ -408,6 +421,7 @@ musicEnabledNode.addEventListener("change", () => {
 });
 setVolume(effectsVolume * 100);
 setMusicVolume(musicVolume * 100);
+setDifficulty(difficulty, { persist: false, rebuild: false });
 
 renderer.setAnimationLoop(tick);
 initAudio();
@@ -699,6 +713,54 @@ function setMusicVolume(value) {
   if (startMusicVolumeValueNode) startMusicVolumeValueNode.textContent = label;
   settingsMusicVolumeValueNode.textContent = label;
   updateMusicVolume();
+}
+
+function readStoredDifficulty() {
+  try {
+    const storedDifficulty = window.localStorage.getItem("ufoCowHuntDifficulty");
+    return difficultyConfigs[storedDifficulty] ? storedDifficulty : "normal";
+  } catch {
+    return "normal";
+  }
+}
+
+function setDifficulty(value, { persist = true, rebuild = true } = {}) {
+  difficulty = difficultyConfigs[value] ? value : "normal";
+  difficultyButtonNodes.forEach((button) => {
+    const selected = button.dataset.difficulty === difficulty;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+
+  if (persist) {
+    try {
+      window.localStorage.setItem("ufoCowHuntDifficulty", difficulty);
+    } catch {
+      // localStorage can be unavailable in some embedded builds.
+    }
+  }
+
+  if (rebuild) {
+    rebuildHazards();
+    updateHud(true, clock.elapsedTime);
+  }
+}
+
+function rebuildHazards() {
+  hazards.forEach((hazard) => {
+    scene.remove(hazard);
+    const objectIndex = levelObjects.indexOf(hazard);
+    if (objectIndex >= 0) levelObjects.splice(objectIndex, 1);
+  });
+  hazards.length = 0;
+  alertLevel = 0;
+  droneDrainUntil = -Infinity;
+  droneDrainStrength = 0;
+  document.body.classList.remove("drone-alert");
+  energyNode.classList.remove("draining");
+  energyNode.style.setProperty("--drone-drain-strength", "0");
+  document.body.style.setProperty("--drone-drain-strength", "0");
+  spawnHazards();
 }
 
 function normalizeKey(event) {
@@ -3417,7 +3479,8 @@ function createEnergyCore() {
 }
 
 function spawnHazards() {
-  getActiveLevel().hazardSpots.forEach(([x, z, radius, speed], index) => {
+  const droneCount = difficultyConfigs[difficulty]?.droneCount ?? difficultyConfigs.normal.droneCount;
+  getActiveLevel().hazardSpots.slice(0, droneCount).forEach(([x, z, radius, speed], index) => {
     const hazard = createPatrolDrone(index);
     hazard.userData = {
       ...hazard.userData,
@@ -3425,7 +3488,7 @@ function spawnHazards() {
       radius,
       speed,
       angle: index * 2.1,
-      warningRadius: 15.5
+      warningRadius: 12.25
     };
     hazards.push(hazard);
     addLevelObject(hazard);
@@ -4177,7 +4240,10 @@ function updateFinalBreakdown() {
     scoreBreakdown.waveBonusScore +
     scoreBreakdown.energyBonusScore;
   const level = getActiveLevel();
-  breakdownAnimalsNode.textContent = `${scoreBreakdown.animalScore.toLocaleString("en-US")} pts`;
+  const totalMissionAnimals = waveConfigs.reduce((sum, wave) => sum + wave.cowGoal, 0);
+  breakdownAnimalsNode.textContent =
+    `${scoreBreakdown.animalsCollectedTotal} / ${totalMissionAnimals} ${level.animalPlural} ` +
+    `(${scoreBreakdown.animalScore.toLocaleString("en-US")} pts)`;
   breakdownBoostersNode.textContent = `${scoreBreakdown.boosterScore.toLocaleString("en-US")} pts`;
   breakdownHumanNode.textContent = `${scoreBreakdown.humanBonusScore.toLocaleString("en-US")} pts`;
   breakdownWavesNode.textContent = `${scoreBreakdown.waveBonusScore.toLocaleString("en-US")} pts`;

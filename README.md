@@ -40,6 +40,7 @@ Energy crystals are optional support items. They do not need to be collected to 
 - Score system with combo multiplier and final score breakdown
 - Beam energy, boost, and rechargeable energy crystals
 - Search drones with louder contact alarms, visible red HUD feedback, scan beams, UFO slowdown, and energy-drain behavior
+- Difficulty setting for drone pressure: Easy disables drones, Normal uses 3 drones, and Hard uses 4 drones
 - Level selection, instruction screen, settings menu, and larger mission-complete reward screen
 - Separate volume controls for UFO/effects and music
 - Music playlist using `music_1.mp3` and `music_2.mp3`

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added Easy, Normal, and Hard difficulty settings for drone count.
+- Reduced drone detection radius slightly.
+- Expanded the mission-complete screen with collected animals versus total available animals.
 - Added the new Ice Drift mission zone.
 - Added collectible polar bears as the Ice Drift wave targets.
 - Added snowy terrain, frozen lakes, icebergs, snow pines, ice crystals, and an ice-block igloo.
