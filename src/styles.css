@@ -287,6 +287,12 @@ body[data-preview-level="desert"] .menu-panel {
     linear-gradient(180deg, rgba(45, 25, 28, 0.9), rgba(18, 9, 18, 0.88));
 }
 
+body[data-preview-level="ice"] .menu-panel {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(164, 239, 255, 0.2), transparent 38%),
+    linear-gradient(180deg, rgba(10, 38, 58, 0.92), rgba(4, 13, 27, 0.9));
+}
+
 #start-screen {
   gap: 8px;
   padding: 14px 22px;
@@ -499,7 +505,7 @@ body[data-preview-level="desert"] .menu-panel {
 
 .level-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -531,6 +537,12 @@ body[data-preview-level="desert"] .menu-panel {
   background:
     radial-gradient(circle at 100% 0%, rgba(255, 207, 126, 0.18), transparent 45%),
     rgba(255, 207, 126, 0.07);
+}
+
+.level-card[data-level="ice"] {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(164, 239, 255, 0.2), transparent 45%),
+    rgba(164, 239, 255, 0.07);
 }
 
 .level-card span {
@@ -763,6 +775,7 @@ body[data-preview-level="desert"] .menu-panel {
   }
 
   .controls-grid,
+  .level-grid,
   .mission-tips,
   .volume-row,
   .button-row {

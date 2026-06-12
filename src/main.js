@@ -106,6 +106,12 @@ const desertTentSites = [
   { x: 42, z: 56, rotation: 0.2, scale: 0.7, seed: 661, cloth: 0xa85a4b },
   { x: -68, z: -16, rotation: 0.72, scale: 0.64, seed: 678, cloth: 0xd0a15d }
 ];
+const iceWaterBodies = [
+  { x: -42, z: -28, rx: 19, rz: 10 },
+  { x: 39, z: 44, rx: 15, rz: 8 },
+  { x: 54, z: -48, rx: 10, rz: 6 }
+];
+const iceOutpost = { x: -58, z: 48, rx: 10, rz: 8 };
 const farmWaterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
@@ -118,6 +124,10 @@ const desertSpawnBlockers = [
   ...desertTentSites.map((site) => ({ x: site.x, z: site.z, rx: 7.5 * site.scale, rz: 5.5 * site.scale })),
   { x: desertPyramid.x, z: desertPyramid.z, rx: desertPyramid.radius, rz: desertPyramid.radius },
   ...desertOases.map((oasis) => ({ x: oasis.x, z: oasis.z, rx: oasis.rx + 4, rz: oasis.rz + 4 }))
+];
+const iceSpawnBlockers = [
+  iceOutpost,
+  ...iceWaterBodies.map((body) => ({ x: body.x, z: body.z, rx: body.rx + 4, rz: body.rz + 4 }))
 ];
 const farmAnimalSpawnZones = [
   { x: 22, z: 27, width: 34, depth: 24 },
@@ -139,6 +149,16 @@ const desertAnimalSpawnZones = [
   { x: 22, z: 61, width: 30, depth: 19 },
   { x: 66, z: 5, width: 24, depth: 24 }
 ];
+const iceAnimalSpawnZones = [
+  { x: -62, z: -47, width: 29, depth: 24 },
+  { x: -14, z: 34, width: 34, depth: 24 },
+  { x: 36, z: 22, width: 32, depth: 26 },
+  { x: 60, z: -22, width: 28, depth: 24 },
+  { x: -4, z: -62, width: 32, depth: 20 },
+  { x: -66, z: 18, width: 25, depth: 22 },
+  { x: 28, z: 62, width: 30, depth: 18 },
+  { x: 68, z: 34, width: 22, depth: 22 }
+];
 const farmBonusSpawnZones = [
   { x: -66, z: 28, width: 24, depth: 28 },
   { x: 18, z: 63, width: 28, depth: 18 },
@@ -150,6 +170,12 @@ const desertBonusSpawnZones = [
   { x: 52, z: 45, width: 24, depth: 18 },
   { x: 63, z: -17, width: 24, depth: 22 },
   { x: -28, z: -63, width: 24, depth: 18 }
+];
+const iceBonusSpawnZones = [
+  { x: -58, z: 48, width: 20, depth: 16 },
+  { x: 50, z: 54, width: 24, depth: 16 },
+  { x: 65, z: -36, width: 22, depth: 20 },
+  { x: -30, z: -62, width: 24, depth: 16 }
 ];
 let waterBodies = farmWaterBodies;
 let spawnBlockers = farmSpawnBlockers;
@@ -237,6 +263,40 @@ const levelConfigs = {
       [-23, 31, 18, 0.82],
       [48, -36, 20, -0.88],
       [58, 14, 16, 1.05]
+    ]
+  },
+  ice: {
+    id: "ice",
+    displayName: "Ice Drift",
+    cardTitle: "Ice / Polar Bear Hunt",
+    kicker: "Frozen ridge abduction run",
+    previewClass: "ice",
+    animalSingular: "polar bear",
+    animalPlural: "polar bears",
+    animalTitle: "Polar Bears",
+    objectiveCopy: "Fly the UFO over frozen lakes, abduct every polar bear, avoid search drones, and recharge with energy diamonds.",
+    beamTip: "Hover over polar bears or the bonus explorer.",
+    animalTip: "Beam them up for points.",
+    waveTip: "Timed waves: 10 in 1:35, 15 in 1:55, 20 in 2:15.",
+    waveStartHint: "Collect every polar bear to advance.",
+    calmText: "Explorer hidden",
+    alarmText: "Ice alarm!",
+    animalSpots: iceAnimalSpawnZones,
+    bonusSpots: iceBonusSpawnZones,
+    water: iceWaterBodies,
+    blockers: iceSpawnBlockers,
+    colliders: [],
+    powerupSpots: [
+      [-60, 60],
+      [46, 36],
+      [70, -36],
+      [-28, -60],
+      [8, 2]
+    ],
+    hazardSpots: [
+      [-22, 30, 17, 0.88],
+      [44, -28, 19, -0.84],
+      [58, 34, 16, 1.08]
     ]
   }
 };
@@ -547,9 +607,12 @@ function applyLevel(levelId) {
   cowSpawnZones = level.animalSpots;
   bonusSpawnZones = level.bonusSpots;
   document.body.dataset.previewLevel = level.previewClass;
-  scene.background = new THREE.Color(level.id === "desert" ? 0x120b14 : 0x030713);
-  scene.fog = new THREE.FogExp2(level.id === "desert" ? 0x2a1723 : 0x061226, level.id === "desert" ? 0.010 : 0.012);
-  renderer.toneMappingExposure = level.id === "desert" ? 1.28 : 1.18;
+  scene.background = new THREE.Color(level.id === "desert" ? 0x120b14 : level.id === "ice" ? 0x04101d : 0x030713);
+  scene.fog = new THREE.FogExp2(
+    level.id === "desert" ? 0x2a1723 : level.id === "ice" ? 0x0b2535 : 0x061226,
+    level.id === "desert" ? 0.010 : level.id === "ice" ? 0.011 : 0.012
+  );
+  renderer.toneMappingExposure = level.id === "desert" ? 1.28 : level.id === "ice" ? 1.34 : 1.18;
   rebuildLevel();
   updateStartScreenText();
   updateHud(true, clock.elapsedTime);
@@ -683,6 +746,14 @@ function createTerrain() {
       if (path > 0.2) color.setHSL(0.11, 0.72, 0.44 + path * 0.06 + detail * 0.18);
       if (ridge > 0.42) color.setHSL(0.1, 0.68, 0.46 + ridge * 0.085 + detail * 0.18);
       if (height > 5.4) color.setHSL(0.095, 0.6, 0.5 + height * 0.006);
+    } else if (activeLevelId === "ice") {
+      const frost = iceFrostAmount(x, z);
+      const snowLight = THREE.MathUtils.clamp(0.56 + height * 0.009 + frost * 0.1 + detail * 0.42, 0.45, 0.82);
+      color.setHSL(0.56 + Math.sin(x * 0.02) * 0.012, 0.48, snowLight);
+      if (path > 0.18) color.setHSL(0.54, 0.42, 0.5 + path * 0.08 + detail * 0.16);
+      if (shore > 0.08) color.setHSL(0.52, 0.56, 0.56 + shore * 0.12);
+      if (ridge > 0.42) color.setHSL(0.58, 0.34, 0.62 + ridge * 0.1 + detail * 0.14);
+      if (water) color.setHSL(0.53, 0.7, 0.58 + Math.max(0, shore) * 0.08);
     } else {
       const meadow =
         0.19 +
@@ -708,8 +779,8 @@ function createTerrain() {
     vertexColors: true,
     roughness: 0.96,
     metalness: 0.02,
-    emissive: activeLevelId === "desert" ? 0x6a4514 : 0x000000,
-    emissiveIntensity: activeLevelId === "desert" ? 0.24 : 0
+    emissive: activeLevelId === "desert" ? 0x6a4514 : activeLevelId === "ice" ? 0x102a3a : 0x000000,
+    emissiveIntensity: activeLevelId === "desert" ? 0.24 : activeLevelId === "ice" ? 0.16 : 0
   });
 
   const mesh = new THREE.Mesh(geometry, material);
@@ -719,6 +790,7 @@ function createTerrain() {
 
 function terrainHeight(x, z) {
   if (activeLevelId === "desert") return desertTerrainHeight(x, z);
+  if (activeLevelId === "ice") return iceTerrainHeight(x, z);
   const water = isWater(x, z);
   const lakeSink = water ? -1.55 : 0;
   const shoreLift = shoreAmount(x, z) * 0.46;
@@ -768,6 +840,23 @@ function desertTerrainHeight(x, z) {
   return Math.max(dune, -0.46);
 }
 
+function iceTerrainHeight(x, z) {
+  const frozen = isWater(x, z);
+  const lakeSink = frozen ? -0.85 : 0;
+  const shoreLift = shoreAmount(x, z) * 0.42;
+  const ridge =
+    Math.sin(x * 0.056 + z * 0.018) * 2.0 +
+    Math.cos(z * 0.052 - x * 0.016) * 2.2 +
+    Math.sin((x + z) * 0.032) * 1.4 +
+    Math.cos((x - z) * 0.024) * 1.0 +
+    iceRidgeAmount(x, z) * 3.4 +
+    shoreLift +
+    lakeSink;
+
+  if (frozen) return ridge;
+  return Math.max(ridge, -0.38);
+}
+
 function desertDuneAmount(x, z) {
   return THREE.MathUtils.clamp(
     (Math.sin(x * 0.045 + z * 0.02) + Math.cos(z * 0.04 - x * 0.018) + 2) * 0.25,
@@ -784,8 +873,25 @@ function desertRidgeAmount(x, z) {
   );
 }
 
+function iceFrostAmount(x, z) {
+  return THREE.MathUtils.clamp(
+    (Math.sin(x * 0.06) + Math.cos(z * 0.055) + Math.sin((x - z) * 0.035) + 3) / 6,
+    0,
+    1
+  );
+}
+
+function iceRidgeAmount(x, z) {
+  return Math.max(
+    0,
+    Math.max(0, 1 - Math.abs(x * 0.028 + z * 0.026 - 0.15)),
+    Math.max(0, 1 - Math.abs(x * -0.026 + z * 0.031 + 0.86))
+  );
+}
+
 function ridgeAmount(x, z) {
   if (activeLevelId === "desert") return desertRidgeAmount(x, z);
+  if (activeLevelId === "ice") return iceRidgeAmount(x, z);
   return Math.max(
     0,
     Math.max(0, 1 - Math.abs(x * 0.034 + z * 0.016 - 0.7)),
@@ -819,6 +925,13 @@ function dryLandAmount(x, z) {
       softRectAmount(x, z, -52, 47, 32, 20) * 0.65
     );
   }
+  if (activeLevelId === "ice") {
+    return Math.max(
+      1 - distanceToSegment(x, z, -72, 50, 60, 36) / 9,
+      1 - distanceToSegment(x, z, -60, -42, 56, -12) / 10,
+      softRectAmount(x, z, -58, 48, 26, 20) * 0.72
+    );
+  }
   return Math.max(
     pastureAmount(x, z) * 0.62,
     softRectAmount(x, z, 54, 43, 31, 26),
@@ -838,6 +951,15 @@ function pathAmount(x, z) {
       1 - distanceToSegment(x, z, -52, 48, 44, -32) / 4.4
     );
   }
+  if (activeLevelId === "ice") {
+    return Math.max(
+      0,
+      1 - distanceToSegment(x, z, -76, 48, -26, 32) / 4.8,
+      1 - distanceToSegment(x, z, -26, 32, 26, 14) / 4.6,
+      1 - distanceToSegment(x, z, 26, 14, 70, -22) / 5.2,
+      1 - distanceToSegment(x, z, -52, -46, 44, -12) / 4.4
+    );
+  }
   return Math.max(
     0,
     1 - distanceToSegment(x, z, -78, 60, -38, 40) / 5.4,
@@ -854,6 +976,14 @@ function pastureAmount(x, z) {
       softRectAmount(x, z, -20, 34, 32, 22),
       softRectAmount(x, z, 42, 28, 30, 24),
       softRectAmount(x, z, 58, -40, 28, 22)
+    );
+  }
+  if (activeLevelId === "ice") {
+    return Math.max(
+      softRectAmount(x, z, -62, -47, 30, 24),
+      softRectAmount(x, z, -14, 34, 32, 22),
+      softRectAmount(x, z, 36, 22, 30, 24),
+      softRectAmount(x, z, 60, -22, 28, 22)
     );
   }
   return Math.max(
@@ -954,6 +1084,18 @@ function addLandscapeDetails() {
     return;
   }
 
+  if (activeLevelId === "ice") {
+    addIceLighting();
+    addIceGroundDetails();
+    addFrozenLakes();
+    addIceBoundaryBlocks();
+    addIceDetails();
+    addRocks();
+    addClouds();
+    addFireflies();
+    return;
+  }
+
   addWater();
   addShoreDetails();
   addMeadowPatches();
@@ -1003,6 +1145,415 @@ function addDesertLighting() {
   lowSun.castShadow = true;
   lowSun.shadow.mapSize.set(1024, 1024);
   addLevelObject(warmFill, lowSun);
+}
+
+function addIceLighting() {
+  const blueFill = new THREE.HemisphereLight(0xb8eaff, 0x0a1724, 1.75);
+  const auroraMoon = new THREE.DirectionalLight(0xc8f7ff, 1.55);
+  auroraMoon.position.set(-34, 66, 46);
+  auroraMoon.castShadow = true;
+  auroraMoon.shadow.mapSize.set(1024, 1024);
+  addLevelObject(blueFill, auroraMoon);
+}
+
+function addIceGroundDetails() {
+  const snowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xe9fbff,
+    transparent: true,
+    opacity: 0.13,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const blueMaterial = new THREE.MeshBasicMaterial({
+    color: 0x7edcff,
+    transparent: true,
+    opacity: 0.09,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const geometry = new THREE.CircleGeometry(1, 24);
+
+  for (let i = 0; i < 34; i += 1) {
+    const x = ((i * 41) % 148) - 74 + Math.sin(i * 1.2) * 3.8;
+    const z = ((i * 59) % 148) - 74 + Math.cos(i * 0.9) * 4.1;
+    if (!isDryObjectSpot(x, z, 5.8)) continue;
+    const patch = new THREE.Mesh(geometry, i % 3 === 0 ? blueMaterial : snowMaterial);
+    patch.rotation.x = -Math.PI / 2;
+    patch.rotation.z = i * 0.39;
+    patch.position.set(x, terrainHeight(x, z) + 0.065, z);
+    patch.scale.set(4.2 + (i % 6) * 0.8, 1.4 + (i % 5) * 0.34, 1);
+    addLevelObject(patch);
+  }
+}
+
+function addFrozenLakes() {
+  const iceMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8adbf4,
+    emissive: 0x1b6f8f,
+    emissiveIntensity: 0.3,
+    roughness: 0.18,
+    metalness: 0.16,
+    transparent: true,
+    opacity: 0.82
+  });
+  const rimMaterial = new THREE.MeshBasicMaterial({
+    color: 0xe8fbff,
+    transparent: true,
+    opacity: 0.22,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const crackMaterial = new THREE.MeshBasicMaterial({
+    color: 0xd8fbff,
+    transparent: true,
+    opacity: 0.34,
+    depthWrite: false
+  });
+
+  iceWaterBodies.forEach((body, index) => {
+    const y = terrainHeight(body.x, body.z);
+    const rim = new THREE.Mesh(new THREE.RingGeometry(0.94, 1.22, 60), rimMaterial);
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(body.x, y + 0.06, body.z);
+    rim.scale.set(body.rx, body.rz, 1);
+    addLevelObject(rim);
+
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(1, 64), iceMaterial);
+    lake.rotation.x = -Math.PI / 2;
+    lake.position.set(body.x, y + 0.11, body.z);
+    lake.scale.set(body.rx, body.rz, 1);
+    lake.name = `frozen-lake-${index}`;
+    lake.userData = { waveOffset: index * 0.9 };
+    waterSurfaces.push(lake);
+    addLevelObject(lake);
+
+    for (let crack = 0; crack < 4; crack += 1) {
+      const line = new THREE.Mesh(new THREE.BoxGeometry(body.rx * 0.58, 0.025, 0.05), crackMaterial);
+      line.position.set(
+        body.x + Math.cos(crack * 1.7 + index) * body.rx * 0.15,
+        y + 0.14 + crack * 0.004,
+        body.z + Math.sin(crack * 1.2) * body.rz * 0.16
+      );
+      line.rotation.y = crack * 0.85 + index * 0.35;
+      addLevelObject(line);
+    }
+  });
+}
+
+function addIceBoundaryBlocks() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xb9eaff,
+    emissive: 0x143e52,
+    emissiveIntensity: 0.12,
+    roughness: 0.5,
+    metalness: 0.04
+  });
+  const geometry = new THREE.BoxGeometry(4.6, 1.2, 1.5);
+  const group = new THREE.Group();
+  const inset = 4.4;
+  const edge = halfWorld - inset;
+  const spacing = 7.4;
+  const sides = [
+    { start: [-edge, -edge], end: [edge, -edge], angle: 0 },
+    { start: [-edge, edge], end: [edge, edge], angle: 0 },
+    { start: [-edge, -edge], end: [-edge, edge], angle: Math.PI / 2 },
+    { start: [edge, -edge], end: [edge, edge], angle: Math.PI / 2 }
+  ];
+
+  sides.forEach((side, sideIndex) => {
+    const [x1, z1] = side.start;
+    const [x2, z2] = side.end;
+    const length = Math.hypot(x2 - x1, z2 - z1);
+    const count = Math.floor(length / spacing);
+    for (let i = 0; i <= count; i += 1) {
+      const t = i / count;
+      const x = THREE.MathUtils.lerp(x1, x2, t);
+      const z = THREE.MathUtils.lerp(z1, z2, t);
+      const block = new THREE.Mesh(geometry, material);
+      block.position.set(x, terrainHeight(x, z) + 0.56, z);
+      block.rotation.y = side.angle + Math.sin((i + sideIndex) * 1.4) * 0.08;
+      block.scale.set(0.86 + (i % 3) * 0.1, 0.7 + (i % 2) * 0.12, 0.8);
+      block.castShadow = true;
+      block.receiveShadow = true;
+      group.add(block);
+    }
+  });
+
+  addLevelObject(group);
+}
+
+function addIceDetails() {
+  addIceOutpost();
+  addIcebergs();
+  addSnowPines();
+  addIceCrystals();
+}
+
+function addIceOutpost() {
+  const spot = findDryObjectSpot(iceOutpost.x, iceOutpost.z, 9, 830);
+  const group = new THREE.Group();
+  const iceBlock = new THREE.MeshStandardMaterial({
+    color: 0xd6f7ff,
+    emissive: 0x1d566b,
+    emissiveIntensity: 0.15,
+    roughness: 0.54,
+    transparent: true,
+    opacity: 0.94
+  });
+  const iceCap = new THREE.MeshStandardMaterial({
+    color: 0xf1feff,
+    emissive: 0x1d485d,
+    emissiveIntensity: 0.1,
+    roughness: 0.62
+  });
+  const dark = new THREE.MeshStandardMaterial({
+    color: 0x101b27,
+    emissive: 0x03070c,
+    roughness: 0.9
+  });
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x9df7ff,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false
+  });
+  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+
+  const makeBlock = (x, y, z, sx, sy, sz, rotationY = 0, material = iceBlock) => {
+    const block = new THREE.Mesh(blockGeometry, material);
+    block.position.set(x, y, z);
+    block.scale.set(sx, sy, sz);
+    block.rotation.y = rotationY;
+    block.castShadow = true;
+    block.receiveShadow = true;
+    group.add(block);
+    return block;
+  };
+
+  const layers = [
+    { radius: 3.25, y: 0.42, count: 18, height: 0.62 },
+    { radius: 2.85, y: 0.95, count: 16, height: 0.58 },
+    { radius: 2.35, y: 1.43, count: 14, height: 0.54 },
+    { radius: 1.82, y: 1.85, count: 11, height: 0.48 },
+    { radius: 1.22, y: 2.17, count: 8, height: 0.38 }
+  ];
+
+  layers.forEach((layer, layerIndex) => {
+    for (let i = 0; i < layer.count; i += 1) {
+      const angle = (i / layer.count) * Math.PI * 2 + layerIndex * 0.16;
+      const frontGap = Math.abs(Math.atan2(Math.sin(angle - Math.PI), Math.cos(angle - Math.PI)));
+      if (frontGap < 0.34 && layerIndex < 3) continue;
+      const x = Math.sin(angle) * layer.radius;
+      const z = Math.cos(angle) * layer.radius;
+      const width = (Math.PI * 2 * layer.radius) / layer.count * 0.78;
+      makeBlock(x, layer.y, z, width, layer.height, 0.52, angle);
+    }
+  });
+
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.06, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), iceCap);
+  cap.position.y = 2.42;
+  cap.scale.set(1.0, 0.48, 0.9);
+  cap.castShadow = true;
+  cap.receiveShadow = true;
+
+  const portal = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 0.74, 6, 12), dark);
+  portal.position.set(0, 0.82, -3.02);
+  portal.scale.set(1.0, 1.0, 0.18);
+  portal.castShadow = true;
+
+  makeBlock(-0.72, 0.48, -3.12, 0.34, 0.78, 0.5, -0.16);
+  makeBlock(0.72, 0.48, -3.12, 0.34, 0.78, 0.5, 0.16);
+  makeBlock(-0.5, 1.14, -3.15, 0.42, 0.34, 0.48, -0.54);
+  makeBlock(0, 1.32, -3.15, 0.5, 0.32, 0.48, 0);
+  makeBlock(0.5, 1.14, -3.15, 0.42, 0.34, 0.48, 0.54);
+
+  const threshold = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.1, 0.84), iceCap);
+  threshold.position.set(0, 0.08, -3.34);
+  threshold.castShadow = true;
+  threshold.receiveShadow = true;
+
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.58, 18), glowMaterial);
+  glow.position.set(0, 0.85, -3.21);
+  glow.rotation.y = Math.PI;
+
+  const lamp = new THREE.PointLight(0x91eaff, 1.55, 15, 1.9);
+  lamp.position.set(0, 1.55, -3.0);
+  group.add(cap, portal, threshold, glow, lamp);
+  group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.02, spot.z);
+  group.rotation.y = -0.45;
+  addLevelObject(group);
+}
+
+function createPolarBear(index) {
+  const group = new THREE.Group();
+  const fur = new THREE.MeshStandardMaterial({
+    color: index % 2 === 0 ? 0xfffbec : 0xe4f4f6,
+    emissive: 0x102a38,
+    emissiveIntensity: 0.08,
+    roughness: 0.78
+  });
+  const shadowFur = new THREE.MeshStandardMaterial({
+    color: 0xb9d1da,
+    emissive: 0x0a2431,
+    emissiveIntensity: 0.08,
+    roughness: 0.82
+  });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x141a1f, roughness: 0.82 });
+  const groundShadow = new THREE.MeshBasicMaterial({
+    color: 0x14364a,
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.55, 22), groundShadow);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0.32, 0.035, 0);
+  shadow.scale.set(1.35, 0.58, 1);
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.72, 0.78), fur);
+  body.position.y = 0.88;
+  body.castShadow = true;
+  body.receiveShadow = true;
+
+  const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.82, 0.86), fur);
+  shoulder.position.set(0.62, 1.0, 0);
+  shoulder.castShadow = true;
+
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.48, 0.5), fur);
+  head.position.set(1.46, 1.1, 0);
+  head.castShadow = true;
+
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.32), shadowFur);
+  snout.position.set(1.92, 1.03, 0);
+  snout.castShadow = true;
+
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, 0.18), dark);
+  nose.position.set(2.12, 1.06, 0);
+
+  for (const z of [-0.17, 0.17]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), fur);
+    ear.position.set(1.34, 1.38, z);
+    ear.scale.set(0.8, 1.0, 0.7);
+    group.add(ear);
+
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 5), dark);
+    eye.position.set(1.82, 1.18, z * 0.72);
+    group.add(eye);
+  }
+
+  const legGeometry = new THREE.BoxGeometry(0.26, 0.68, 0.24);
+  for (const x of [-0.72, 0.12, 0.82, 1.16]) {
+    const side = x === -0.72 || x === 0.82 ? -0.24 : 0.24;
+    const leg = new THREE.Mesh(legGeometry, x < 0 ? shadowFur : fur);
+    leg.position.set(x, 0.38, side);
+    leg.rotation.z = x < 0 ? -0.08 : 0.08;
+    leg.castShadow = true;
+    group.add(leg);
+
+    const paw = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.3), dark);
+    paw.position.set(x + 0.06, 0.08, side);
+    paw.castShadow = true;
+    group.add(paw);
+  }
+
+  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), fur);
+  tail.position.set(-1.22, 0.95, 0);
+  tail.scale.set(0.75, 0.75, 0.75);
+
+  group.add(shadow, body, shoulder, head, snout, nose, tail);
+  group.scale.setScalar(1.18);
+  return group;
+}
+
+function addIcebergs() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xb8efff,
+    emissive: 0x123d55,
+    emissiveIntensity: 0.14,
+    roughness: 0.48,
+    metalness: 0.03
+  });
+
+  [
+    [-46, -18, 2.8],
+    [42, 50, 2.2],
+    [60, -50, 1.8],
+    [-70, 6, 1.6],
+    [4, 66, 2.1],
+    [32, -64, 1.7]
+  ].forEach(([x, z, scale], index) => {
+    const spot = findDryObjectSpot(x, z, 5.5, 860 + index);
+    const berg = new THREE.Mesh(new THREE.ConeGeometry(1.25, 3.4, 5), material);
+    berg.position.set(spot.x, terrainHeight(spot.x, spot.z) + 1.7 * scale, spot.z);
+    berg.scale.set(scale * 0.9, scale, scale * 0.72);
+    berg.rotation.set(index * 0.11, Math.PI / 5 + index * 0.6, index * 0.04);
+    berg.castShadow = true;
+    berg.receiveShadow = true;
+    addLevelObject(berg);
+  });
+}
+
+function addSnowPines() {
+  const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.28, 1.5, 6);
+  const crownGeometry = new THREE.ConeGeometry(0.95, 2.2, 7);
+  const snowCapGeometry = new THREE.ConeGeometry(1.05, 0.75, 7);
+  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x2c231f, roughness: 0.88 });
+  const crownMaterial = new THREE.MeshStandardMaterial({ color: 0x103948, roughness: 0.92 });
+  const snowMaterial = new THREE.MeshStandardMaterial({ color: 0xe8fbff, roughness: 0.7 });
+  const group = new THREE.Group();
+
+  for (let i = 0; i < 76; i += 1) {
+    const edgeAngle = i * 1.83;
+    const ring = i % 3 === 0 ? halfWorld - 18 - (i % 7) * 2 : 38 + (i % 11) * 3;
+    const x = Math.cos(edgeAngle) * ring + Math.sin(i * 0.7) * 3;
+    const z = Math.sin(edgeAngle) * ring + Math.cos(i * 0.9) * 3;
+    if (!isDryObjectSpot(x, z, 4.5) || pastureAmount(x, z) > 0.45 || pathAmount(x, z) > 0.35) continue;
+    const y = terrainHeight(x, z);
+    const scale = 0.65 + (i % 5) * 0.08;
+
+    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    trunk.position.set(x, y + 0.72 * scale, z);
+    trunk.scale.setScalar(scale);
+    trunk.castShadow = true;
+
+    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+    crown.position.set(x, y + 2.05 * scale, z);
+    crown.scale.setScalar(scale);
+    crown.castShadow = true;
+
+    const cap = new THREE.Mesh(snowCapGeometry, snowMaterial);
+    cap.position.set(x, y + 2.65 * scale, z);
+    cap.scale.set(scale * 0.92, scale, scale * 0.92);
+    cap.castShadow = true;
+
+    group.add(trunk, crown, cap);
+  }
+
+  addLevelObject(group);
+}
+
+function addIceCrystals() {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x86f2ff,
+    emissive: 0x28bde0,
+    emissiveIntensity: 0.45,
+    roughness: 0.24,
+    metalness: 0.06
+  });
+  for (let i = 0; i < 24; i += 1) {
+    const x = ((i * 53) % 148) - 74 + Math.sin(i) * 2.5;
+    const z = ((i * 37) % 148) - 74 + Math.cos(i * 1.2) * 2.5;
+    if (!isDryObjectSpot(x, z, 4.2)) continue;
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.58 + (i % 3) * 0.12, 0), material);
+    crystal.position.set(x, terrainHeight(x, z) + 0.7, z);
+    crystal.scale.set(0.72, 1.35 + (i % 4) * 0.18, 0.72);
+    crystal.rotation.set(i * 0.2, i * 0.7, i * 0.12);
+    crystal.castShadow = true;
+    crystal.receiveShadow = true;
+    addLevelObject(crystal);
+  }
 }
 
 function addDesertDetails() {
@@ -2396,13 +2947,15 @@ function isSpawnCandidateSafe(x, z, used, minDistance) {
 }
 
 function collectibleBaseHeight(type, x, z) {
-  if (type === "animal") return maxTerrainHeightAround(x, z, activeLevelId === "desert" ? 1.7 : 1.45) + 0.12;
+  if (type === "animal") return maxTerrainHeightAround(x, z, activeLevelId === "desert" ? 1.7 : activeLevelId === "ice" ? 2.1 : 1.45) + 0.12;
   if (type === "bonus") return maxTerrainHeightAround(x, z, 0.8) + 0.08;
   return terrainHeight(x, z);
 }
 
 function createAnimal(index) {
-  return activeLevelId === "desert" ? createCamel(index) : createCow(index);
+  if (activeLevelId === "desert") return createCamel(index);
+  if (activeLevelId === "ice") return createPolarBear(index);
+  return createCow(index);
 }
 
 function createCow(index) {
@@ -2531,7 +3084,9 @@ function createCamel(index) {
 }
 
 function createHumanForLevel() {
-  return activeLevelId === "desert" ? createDesertHuman() : createBonusHuman();
+  if (activeLevelId === "desert") return createDesertHuman();
+  if (activeLevelId === "ice") return createIceHuman();
+  return createBonusHuman();
 }
 
 function createBonusHuman() {
@@ -2644,6 +3199,62 @@ function createDesertHuman() {
   glow.position.set(0.02, 1.36, 0);
 
   group.add(body, head, turban, scarfTail, canteen, glow);
+  group.scale.setScalar(1.2);
+  return group;
+}
+
+function createIceHuman() {
+  const group = new THREE.Group();
+  const suit = new THREE.MeshStandardMaterial({ color: 0xd94c58, roughness: 0.78 });
+  const pants = new THREE.MeshStandardMaterial({ color: 0x24344f, roughness: 0.78 });
+  const fur = new THREE.MeshStandardMaterial({ color: 0xe8f4ef, roughness: 0.72 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd99a6c, roughness: 0.68 });
+  const visor = new THREE.MeshBasicMaterial({ color: 0x9ffcff });
+
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.92, 5, 12), suit);
+  body.position.y = 1.06;
+  body.rotation.z = 0.12;
+  body.castShadow = true;
+
+  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 10), fur);
+  hood.position.set(0.08, 1.82, 0);
+  hood.scale.set(1, 1.05, 0.92);
+  hood.castShadow = true;
+
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 8), skin);
+  face.position.set(0.22, 1.8, 0);
+  face.scale.set(0.7, 0.72, 0.64);
+
+  const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.34), visor);
+  goggles.position.set(0.38, 1.86, 0);
+
+  const legGeometry = new THREE.CapsuleGeometry(0.11, 0.5, 4, 8);
+  [-0.14, 0.16].forEach((x, index) => {
+    const leg = new THREE.Mesh(legGeometry, pants);
+    leg.position.set(x, 0.34, 0);
+    leg.rotation.z = index === 0 ? 0.12 : -0.22;
+    leg.castShadow = true;
+    group.add(leg);
+  });
+
+  const beacon = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 12, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff77dd })
+  );
+  beacon.position.set(-0.42, 1.35, 0.12);
+
+  const glow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.48, 14, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xff77dd,
+      transparent: true,
+      opacity: 0.24,
+      depthWrite: false
+    })
+  );
+  glow.position.set(0.02, 1.36, 0);
+
+  group.add(body, hood, face, goggles, beacon, glow);
   group.scale.setScalar(1.2);
   return group;
 }

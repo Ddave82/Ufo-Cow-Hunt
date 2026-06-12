@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" alt="UFO Cow Hunt logo" width="25%">
 
-A small 3D browser game built with Three.js: fly a UFO across stylized low-poly night landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, desert ruins, farm fields, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
+A small 3D browser game built with Three.js: fly a UFO across stylized low-poly night landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, desert ruins, frozen ridges, farm fields, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
 
 ![UFO Cow Hunt](https://img.shields.io/badge/Three.js-3D%20Browsergame-79fff0)
 ![Vite](https://img.shields.io/badge/Vite-dev%20server-fff2a5)
@@ -11,11 +11,11 @@ A small 3D browser game built with Three.js: fly a UFO across stylized low-poly 
 
 [Play UFO Cow Hunt on GitHub Pages](https://ddave82.github.io/Ufo-Cow-Hunt/)
 
-![Screenshot of UFO Cow Hunt](assets/screenshot.png)
+<img src="assets/cowhunt_cover.png" alt="UFO Cow Hunt cover" width="600">
 
 ## Gameplay
 
-You control a UFO across selectable mission zones. The current levels are Farm Night with cows and Desert Hunt with camels. Animals give points, a rare bonus human or traveler gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger loud alarms, flash the HUD, slow the UFO, and drain beam energy when they lock onto you.
+You control a UFO across selectable mission zones. The current levels are Farm Night with cows, Desert Hunt with camels, and Ice Drift with polar bears. Animals give points, a rare bonus human, traveler, or explorer gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger loud alarms, flash the HUD, slow the UFO, and drain beam energy when they lock onto you.
 
 Each mission is split into three waves in the same selected level:
 
@@ -28,9 +28,10 @@ Energy crystals are optional support items. They do not need to be collected to 
 ## Features
 
 - Low-poly 3D landscapes with terrain, clouds, stars, moonlight, and level-specific props
-- Level selection with Farm Night and Desert Hunt
+- Level selection with Farm Night, Desert Hunt, and Ice Drift
 - Farm Night with fields, ponds, trees, fences, hay bales, cows, and a rare bonus human
 - Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
+- Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, and a polar explorer bonus human
 - Detailed UFO with metal rivets, glass dome, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
@@ -118,4 +119,4 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 
 ## Status
 
-Playable prototype with two mission zones, timed waves, scoring, drone pressure, and local audio assets.
+Playable prototype with three mission zones, timed waves, scoring, drone pressure, and local audio assets.
