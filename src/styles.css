@@ -19,6 +19,24 @@ body {
   overflow: hidden;
 }
 
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 50% 55%, transparent 42%, rgba(255, 47, 84, 0.18)),
+    linear-gradient(180deg, rgba(255, 47, 84, 0.08), transparent 36%, rgba(255, 47, 84, 0.1));
+  transition: opacity 160ms ease;
+}
+
+body.drone-alert::after {
+  opacity: calc(0.18 + var(--drone-drain-strength, 0) * 0.28);
+  animation: droneScreenPulse 360ms steps(2, end) infinite;
+}
+
 #game {
   display: block;
   width: 100vw;
@@ -159,11 +177,21 @@ body {
   position: fixed;
   left: 18px;
   bottom: 18px;
+  z-index: 4;
   width: min(260px, calc(100vw - 220px));
   min-width: 178px;
   padding: 12px 14px;
   border-radius: 8px;
   pointer-events: none;
+}
+
+#energy.draining {
+  border-color: rgba(255, 86, 112, 0.7);
+  box-shadow:
+    0 0 28px rgb(255 48 84 / calc(0.2 + var(--drone-drain-strength, 0) * 0.34)),
+    0 14px 34px rgba(0, 0, 0, 0.34),
+    inset 0 0 22px rgba(255, 48, 84, 0.2);
+  animation: droneEnergyPulse 300ms ease-in-out infinite alternate;
 }
 
 #energy span {
@@ -186,6 +214,18 @@ body {
   background: linear-gradient(90deg, #79fff0, #fff2a5);
   box-shadow: 0 0 18px rgba(126, 255, 237, 0.55);
   transform-origin: left center;
+}
+
+#energy.draining .meter i {
+  background: linear-gradient(90deg, #ff3b5f, #ffd36f);
+  box-shadow:
+    0 0 18px rgba(255, 70, 100, 0.78),
+    0 0 32px rgba(255, 209, 95, 0.28);
+}
+
+#energy.draining small {
+  color: #ffccd3;
+  text-shadow: 0 0 12px rgba(255, 70, 100, 0.9);
 }
 
 #message {
@@ -634,6 +674,22 @@ body[data-preview-level="desert"] .menu-panel {
 #message.hidden {
   opacity: 0;
   transform: translate(-50%, 16px);
+}
+
+@keyframes droneEnergyPulse {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes droneScreenPulse {
+  50% {
+    opacity: calc(0.24 + var(--drone-drain-strength, 0) * 0.34);
+  }
 }
 
 @media (max-width: 520px) {

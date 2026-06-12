@@ -17,6 +17,7 @@ const comboNode = document.querySelector("#combo");
 const targetCountNode = document.querySelector("#target-count");
 const bonusStatusNode = document.querySelector("#bonus-status");
 const dangerStatusNode = document.querySelector("#danger-status");
+const energyNode = document.querySelector("#energy");
 const energyFillNode = document.querySelector("#energy-fill");
 const energyLabelNode = document.querySelector("#energy-label");
 const messageNode = document.querySelector("#message");
@@ -275,6 +276,8 @@ let lastAlertSound = 0;
 let lastNoPowerFeedback = -Infinity;
 let lastCollisionFeedback = -Infinity;
 let lastDroneFeedback = -Infinity;
+let droneDrainUntil = -Infinity;
+let droneDrainStrength = 0;
 let missionStartTime = 0;
 let missionEndTime = 0;
 let takeoffUntil = 0;
@@ -3192,6 +3195,7 @@ function updatePowerups(delta, elapsed, active = true) {
 function updateHazards(delta, elapsed, active = true) {
   let detected = false;
   let strongestLock = 0;
+  let totalEnergyDrain = 0;
 
   for (const hazard of hazards) {
     const data = hazard.userData;
@@ -3211,28 +3215,40 @@ function updateHazards(delta, elapsed, active = true) {
     const distance = hazard.position.distanceTo(ufo.group.position);
     if (active && distance < data.warningRadius) {
       const lockStrength = THREE.MathUtils.clamp(1 - distance / data.warningRadius, 0.12, 1);
+      const contactStrength = THREE.MathUtils.smoothstep(lockStrength, 0.42, 0.92);
       strongestLock = Math.max(strongestLock, lockStrength);
       detected = true;
       alertLevel = Math.min(100, alertLevel + delta * (beamActive ? 72 : 54) * lockStrength);
-      beamEnergy = Math.max(0, beamEnergy - delta * (18 + lockStrength * 22));
+      const energyDrain = delta * (22 + lockStrength * 30 + contactStrength * 22);
+      totalEnergyDrain += energyDrain;
+      beamEnergy = Math.max(0, beamEnergy - energyDrain);
       ufoState.velocity.multiplyScalar(Math.pow(0.18 + lockStrength * 0.35, delta));
-      ufo.group.position.y += Math.sin(elapsed * 42) * 0.02 * lockStrength;
-      if (data.scan) data.scan.material.opacity = 0.2 + lockStrength * 0.22;
+      ufo.group.position.y += Math.sin(elapsed * 46) * (0.02 + contactStrength * 0.03) * lockStrength;
+      if (data.scan) {
+        data.scan.material.opacity = 0.24 + lockStrength * 0.34 + contactStrength * 0.1;
+        data.scan.scale.setScalar(1 + lockStrength * 0.15 + Math.sin(elapsed * 15) * 0.05);
+      }
     }
   }
 
   if (active && !detected) {
     alertLevel = Math.max(0, alertLevel - delta * 11);
+    droneDrainStrength = Math.max(0, droneDrainStrength - delta * 3.5);
   }
 
-  if (active && detected && elapsed - lastAlertSound > 0.78) {
+  if (active && detected) {
+    droneDrainUntil = elapsed + 0.25;
+    droneDrainStrength = THREE.MathUtils.lerp(droneDrainStrength, strongestLock, 0.45);
+  }
+
+  if (active && detected && elapsed - lastAlertSound > 0.54) {
     lastAlertSound = elapsed;
-    playAlertSound(strongestLock);
+    playAlertSound(strongestLock, totalEnergyDrain);
   }
 
-  if (active && detected && elapsed - lastDroneFeedback > 2.1) {
+  if (active && detected && elapsed - lastDroneFeedback > 1.35) {
     lastDroneFeedback = elapsed;
-    flashMessage("Drone lock! Energy draining.");
+    flashMessage(strongestLock > 0.55 ? "Drone contact! Beam energy draining." : "Drone lock! Energy draining.");
   }
 }
 
@@ -3282,13 +3298,19 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
   const level = getActiveLevel();
   bonusStatusNode.textContent = `${capitalize(level.animalPlural)}: ${waveCowsCollected} / ${waveCowGoal}`;
 
-  if (alertLevel > 70) dangerStatusNode.textContent = level.alarmText;
+  if (elapsed < droneDrainUntil) dangerStatusNode.textContent = "Energy draining!";
+  else if (alertLevel > 70) dangerStatusNode.textContent = level.alarmText;
   else if (alertLevel > 32) dangerStatusNode.textContent = "Patrol nearby";
   else dangerStatusNode.textContent = bonusCollected ? "Bonus found" : level.calmText;
 
   const energyPercent = Math.round(beamEnergy);
+  const draining = elapsed < droneDrainUntil || droneDrainStrength > 0.08;
+  energyNode.classList.toggle("draining", draining);
+  document.body.classList.toggle("drone-alert", draining);
   energyFillNode.style.transform = `scaleX(${beamEnergy / 100})`;
-  energyLabelNode.textContent = `${energyPercent}%`;
+  energyLabelNode.textContent = draining ? `${energyPercent}% - DRAINING` : `${energyPercent}%`;
+  energyNode.style.setProperty("--drone-drain-strength", draining ? droneDrainStrength.toFixed(2) : "0");
+  document.body.style.setProperty("--drone-drain-strength", draining ? droneDrainStrength.toFixed(2) : "0");
 }
 
 function completeWave(elapsed) {
@@ -3835,12 +3857,19 @@ function playPowerupSound() {
   playTone(1320, 0.18, "triangle", 0.018, 0.16);
 }
 
-function playAlertSound(strength = 0.5) {
+function playAlertSound(strength = 0.5, drainAmount = 0) {
   const amount = THREE.MathUtils.clamp(strength, 0.25, 1);
-  playTone(92, 0.11, "square", 0.042 * amount);
-  playTone(184, 0.13, "sawtooth", 0.032 * amount, 0.08);
-  playSweep(760, 220, 0.22, "sawtooth", 0.035 * amount, 0.02);
-  playNoiseBurst(0.12, 0.03 * amount, 0.04);
+  const drainBoost = THREE.MathUtils.clamp(drainAmount * 2.2, 0, 0.35);
+  const volume = amount + drainBoost;
+  playTone(88, 0.15, "square", 0.075 * volume);
+  playTone(132, 0.15, "square", 0.052 * volume, 0.16);
+  playSweep(1180, 240, 0.28, "sawtooth", 0.062 * volume, 0.01);
+  playSweep(430, 920, 0.2, "triangle", 0.036 * volume, 0.08);
+  playNoiseBurst(0.18, 0.052 * volume, 0.03);
+  if (amount > 0.58) {
+    playTone(56, 0.2, "sawtooth", 0.058 * volume, 0.07);
+    playNoiseBurst(0.12, 0.04 * volume, 0.19);
+  }
 }
 
 function showNoPowerFeedback(elapsed) {
