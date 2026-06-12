@@ -1099,12 +1099,7 @@ function addPyramid() {
   entrance.position.set(0, 2, -7.8);
   entrance.rotation.x = -0.18;
 
-  const cap = new THREE.Mesh(new THREE.ConeGeometry(2.15, 2.2, 4), darkStone);
-  cap.rotation.y = Math.PI / 4;
-  cap.position.y = 21.4;
-  cap.castShadow = true;
-
-  group.add(foundation, pyramid, entrance, cap);
+  group.add(foundation, pyramid, entrance);
   group.position.set(x, baseY, z);
   group.name = "desert-collision-pyramid";
   addLevelObject(group);
