@@ -3859,16 +3859,17 @@ function playPowerupSound() {
 
 function playAlertSound(strength = 0.5, drainAmount = 0) {
   const amount = THREE.MathUtils.clamp(strength, 0.25, 1);
-  const drainBoost = THREE.MathUtils.clamp(drainAmount * 2.2, 0, 0.35);
-  const volume = amount + drainBoost;
-  playTone(88, 0.15, "square", 0.075 * volume);
-  playTone(132, 0.15, "square", 0.052 * volume, 0.16);
-  playSweep(1180, 240, 0.28, "sawtooth", 0.062 * volume, 0.01);
-  playSweep(430, 920, 0.2, "triangle", 0.036 * volume, 0.08);
-  playNoiseBurst(0.18, 0.052 * volume, 0.03);
+  const drainBoost = THREE.MathUtils.clamp(drainAmount * 2.8, 0, 0.5);
+  const volume = (amount + drainBoost) * 1.28;
+  playTone(88, 0.17, "square", 0.095 * volume);
+  playTone(132, 0.17, "square", 0.074 * volume, 0.16);
+  playSweep(1280, 210, 0.32, "sawtooth", 0.082 * volume, 0.01);
+  playSweep(430, 960, 0.22, "triangle", 0.052 * volume, 0.08);
+  playNoiseBurst(0.2, 0.068 * volume, 0.03);
   if (amount > 0.58) {
-    playTone(56, 0.2, "sawtooth", 0.058 * volume, 0.07);
-    playNoiseBurst(0.12, 0.04 * volume, 0.19);
+    playTone(56, 0.24, "sawtooth", 0.088 * volume, 0.07);
+    playTone(44, 0.18, "square", 0.07 * volume, 0.22);
+    playNoiseBurst(0.16, 0.06 * volume, 0.19);
   }
 }
 
