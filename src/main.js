@@ -267,6 +267,7 @@ let takeoffAudio = null;
 let lastAlertSound = 0;
 let lastNoPowerFeedback = -Infinity;
 let lastCollisionFeedback = -Infinity;
+let lastDroneFeedback = -Infinity;
 let missionStartTime = 0;
 let missionEndTime = 0;
 let takeoffUntil = 0;
@@ -2690,7 +2691,7 @@ function spawnHazards() {
       radius,
       speed,
       angle: index * 2.1,
-      warningRadius: 9.6
+      warningRadius: 15.5
     };
     hazards.push(hazard);
     addLevelObject(hazard);
@@ -3164,6 +3165,7 @@ function updatePowerups(delta, elapsed, active = true) {
 
 function updateHazards(delta, elapsed, active = true) {
   let detected = false;
+  let strongestLock = 0;
 
   for (const hazard of hazards) {
     const data = hazard.userData;
@@ -3172,16 +3174,24 @@ function updateHazards(delta, elapsed, active = true) {
     const z = data.center.z + Math.sin(data.angle) * data.radius;
     hazard.position.set(x, terrainHeight(x, z) + 10.2 + Math.sin(elapsed * 2 + data.radius) * 0.55, z);
     hazard.rotation.y = data.angle + Math.PI;
-    if (data.scan) data.scan.scale.setScalar(0.92 + Math.sin(elapsed * 8 + data.radius) * 0.06);
+    if (data.scan) {
+      data.scan.scale.setScalar(0.92 + Math.sin(elapsed * 8 + data.radius) * 0.06);
+      data.scan.material.opacity = active ? 0.16 : 0.1;
+    }
     if (data.rotors) {
       for (const rotor of data.rotors) rotor.rotation.z += delta * 24;
     }
 
     const distance = hazard.position.distanceTo(ufo.group.position);
     if (active && distance < data.warningRadius) {
+      const lockStrength = THREE.MathUtils.clamp(1 - distance / data.warningRadius, 0.12, 1);
+      strongestLock = Math.max(strongestLock, lockStrength);
       detected = true;
-      alertLevel = Math.min(100, alertLevel + delta * (beamActive ? 31 : 21));
-      beamEnergy = Math.max(0, beamEnergy - delta * 7.5);
+      alertLevel = Math.min(100, alertLevel + delta * (beamActive ? 72 : 54) * lockStrength);
+      beamEnergy = Math.max(0, beamEnergy - delta * (18 + lockStrength * 22));
+      ufoState.velocity.multiplyScalar(Math.pow(0.18 + lockStrength * 0.35, delta));
+      ufo.group.position.y += Math.sin(elapsed * 42) * 0.02 * lockStrength;
+      if (data.scan) data.scan.material.opacity = 0.2 + lockStrength * 0.22;
     }
   }
 
@@ -3189,9 +3199,14 @@ function updateHazards(delta, elapsed, active = true) {
     alertLevel = Math.max(0, alertLevel - delta * 11);
   }
 
-  if (active && detected && elapsed - lastAlertSound > 1.4) {
+  if (active && detected && elapsed - lastAlertSound > 0.78) {
     lastAlertSound = elapsed;
-    playAlertSound();
+    playAlertSound(strongestLock);
+  }
+
+  if (active && detected && elapsed - lastDroneFeedback > 2.1) {
+    lastDroneFeedback = elapsed;
+    flashMessage("Drone lock! Energy draining.");
   }
 }
 
@@ -3204,6 +3219,11 @@ function updateCamera(delta) {
   tempVector.y = height;
   const cameraTarget = tempVector.add(ufo.group.position);
   camera.position.lerp(cameraTarget, 1 - Math.pow(0.018, delta));
+  if (gameStarted && !gameWon && alertLevel > 35) {
+    const shake = Math.min(alertLevel / 100, 1) * 0.08;
+    camera.position.x += Math.sin(clock.elapsedTime * 44) * shake;
+    camera.position.y += Math.cos(clock.elapsedTime * 37) * shake * 0.55;
+  }
 
   tempVector2.copy(ufoState.heading).multiplyScalar(12);
   tempVector2.y = -2.5;
@@ -3789,9 +3809,12 @@ function playPowerupSound() {
   playTone(1320, 0.18, "triangle", 0.018, 0.16);
 }
 
-function playAlertSound() {
-  playTone(118, 0.08, "triangle", 0.026);
-  playTone(164, 0.1, "sine", 0.018, 0.08);
+function playAlertSound(strength = 0.5) {
+  const amount = THREE.MathUtils.clamp(strength, 0.25, 1);
+  playTone(92, 0.11, "square", 0.042 * amount);
+  playTone(184, 0.13, "sawtooth", 0.032 * amount, 0.08);
+  playSweep(760, 220, 0.22, "sawtooth", 0.035 * amount, 0.02);
+  playNoiseBurst(0.12, 0.03 * amount, 0.04);
 }
 
 function showNoPowerFeedback(elapsed) {
