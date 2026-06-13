@@ -65,7 +65,6 @@ const settingsMusicVolumeValueNode = document.querySelector("#settings-music-vol
 const musicEnabledNode = document.querySelector("#music-enabled");
 const difficultyButtonNodes = [...document.querySelectorAll(".difficulty-button")];
 const tutorialEnabledNode = document.querySelector("#tutorial-enabled");
-const replayTutorialButtonNode = document.querySelector("#replay-tutorial-button");
 const tutorialHintNode = document.querySelector("#tutorial-hint");
 const tutorialTitleNode = document.querySelector("#tutorial-title");
 const tutorialCopyNode = document.querySelector("#tutorial-copy");
@@ -455,10 +454,6 @@ difficultyButtonNodes.forEach((button) => {
 tutorialEnabledNode.addEventListener("change", () => {
   tutorialManager.setEnabled(tutorialEnabledNode.checked);
 });
-replayTutorialButtonNode.addEventListener("click", () => {
-  tutorialManager.replay();
-  flashMessage("Tutorial hints reset.");
-});
 musicEnabledNode.addEventListener("change", () => {
   musicEnabled = musicEnabledNode.checked;
   updateMusicVolume();
@@ -624,9 +619,7 @@ function setUiState(nextState) {
     beamLatchUntil = 0;
   }
 
-  if (nextState === UI_STATES.PLAYING && tutorialManager) {
-    tutorialManager.resume();
-  } else if (tutorialManager) {
+  if (nextState !== UI_STATES.PLAYING && tutorialManager) {
     tutorialManager.hide();
   }
 }
@@ -883,7 +876,6 @@ function createTutorialManager() {
   let beamWasUsed = false;
   let missionActiveSince = 0;
   let boostScheduled = false;
-  let replayPending = false;
 
   if (tutorialEnabledNode) tutorialEnabledNode.checked = enabled;
 
@@ -971,7 +963,6 @@ function createTutorialManager() {
 
   function startMission() {
     if (!enabled || isComplete()) return;
-    replayPending = false;
     hide();
     window.clearTimeout(delayTimer);
     moveInputTime = 0;
@@ -1054,28 +1045,12 @@ function createTutorialManager() {
     save();
   }
 
-  function replay() {
-    steps = { ...defaultSteps };
-    enabled = true;
-    replayPending = true;
-    if (tutorialEnabledNode) tutorialEnabledNode.checked = true;
-    save();
-    cancel();
-    if (canShow()) startMission();
-  }
-
-  function resume() {
-    if (replayPending && canShow()) startMission();
-  }
-
   return {
     startMission,
     event,
     cancel,
     hide,
-    setEnabled,
-    replay,
-    resume
+    setEnabled
   };
 }
 
