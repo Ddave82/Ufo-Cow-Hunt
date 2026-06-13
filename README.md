@@ -131,25 +131,3 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 ## Status
 
 Playable prototype with three mission zones, timed waves, scoring, drone pressure, and local audio assets.
-
-## Recent Changes
-
-- [x] Added the Ice Drift mission zone with snowy terrain, frozen lakes, icebergs, snow pines, ice crystals, and an ice-block igloo.
-- [x] Made polar bears the collectible targets in the ice level.
-- [x] Added Easy, Normal, and Hard difficulty settings for drone count.
-- [x] Reduced the drone detection radius.
-- [x] Expanded the mission-complete screen with collected animals versus total available animals.
-- [x] Changed energy crystals to float at UFO flight height and collect on contact without the beam.
-- [x] Expanded energy crystal pickup contact so the UFO rim can collect them.
-- [x] Increased the energy crystal pickup sound and lowered the default music volume.
-- [x] Started the countdown sound one second earlier near the end of each wave.
-
-## Roadmap
-
-- [ ] Add more mission zones with distinct targets and terrain styles.
-- [ ] Add more varied UFO upgrades or temporary power effects.
-- [ ] Improve animal animations and reactions.
-- [ ] Add more environmental landmarks and hidden visual details per level.
-- [ ] Add a high-score or best-time screen.
-- [ ] Add more sound effects for wave starts, time-up moments, and level selection.
-- [ ] Tune wave times and scoring after more playtesting.
