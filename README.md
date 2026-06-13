@@ -51,7 +51,9 @@ Drone pressure can be changed in the settings menu:
 - Beam energy, boost, and touch-collected floating energy crystals with forgiving UFO-rim pickup contact
 - Search drones with louder contact alarms, visible red HUD feedback, scan beams, UFO slowdown, and energy-drain behavior
 - Difficulty setting for drone pressure: Easy disables drones, Normal uses 3 drones, and Hard uses 4 drones
-- Level selection, instruction screen, settings menu, and larger mission-complete reward screen
+- Streamlined main menu with direct play, mission selection, and settings
+- Contextual tutorial hints for movement, beam use, energy crystals, drones, and boost
+- Level selection, settings menu, and larger mission-complete reward screen
 - Separate volume controls for UFO/effects and music
 - Music playlist using `music_1.mp3` and `music_2.mp3`
 - Ambient sound, beam sound, takeoff sound, and gameplay feedback sounds

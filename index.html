@@ -35,29 +35,44 @@
       <strong>UFO Cow Hunt</strong>
       <span>Fly with W/A/S/D or arrows. Hold Space to beam targets aboard.</span>
     </div>
-    <div id="level-screen" class="menu-panel panel" aria-live="polite">
+    <div id="main-menu" class="menu-panel panel" aria-live="polite">
+      <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />
+      <div class="menu-kicker">Night abduction arcade</div>
+      <strong>UFO Cow Hunt</strong>
+      <div class="main-menu-actions">
+        <button id="play-button" class="primary-button" type="button">Play</button>
+        <button id="select-mission-button" class="primary-button secondary" type="button">Select Mission</button>
+        <button id="main-settings-button" class="primary-button secondary" type="button">Settings</button>
+      </div>
+      <small class="menu-footer">Keyboard recommended · ESC to pause</small>
+    </div>
+    <div id="level-screen" class="menu-panel panel hidden" aria-live="polite">
       <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />
       <div class="menu-kicker">Choose mission zone</div>
       <strong>UFO Cow Hunt</strong>
-      <span class="menu-copy">Pick a hunting ground, confirm the level, then review the mission controls before launch.</span>
+      <span class="menu-copy">Pick a mission and launch directly.</span>
       <div class="level-grid">
         <button class="level-card selected" type="button" data-level="farm" aria-pressed="true">
           <span>Farm / Cow Hunt</span>
           <b>Farm Night</b>
-          <small>Moonlit fields, ponds, fences, cows, and patrol drones.</small>
+          <em>Recommended first</em>
+          <small>Abduct cows and avoid patrol drones.</small>
         </button>
         <button class="level-card" type="button" data-level="desert" aria-pressed="false">
           <span>Desert / Camel Hunt</span>
           <b>Desert Hunt</b>
-          <small>Warm dunes, rocks, cacti, camels, and search drones.</small>
+          <small>Abduct camels among dunes and pyramids.</small>
         </button>
         <button class="level-card" type="button" data-level="ice" aria-pressed="false">
           <span>Ice / Polar Bear Hunt</span>
           <b>Ice Drift</b>
-          <small>Frozen lakes, snow ridges, icebergs, polar bears, and patrol drones.</small>
+          <small>Hunt polar bears across frozen lakes.</small>
         </button>
       </div>
-      <button id="confirm-level-button" class="primary-button" type="button">Select This Level</button>
+      <div class="button-row">
+        <button id="confirm-level-button" class="primary-button" type="button">Start Mission</button>
+        <button id="mission-back-button" class="primary-button secondary" type="button">Back</button>
+      </div>
     </div>
     <div id="start-screen" class="menu-panel panel hidden" aria-live="polite">
       <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />
@@ -115,6 +130,20 @@
           </button>
         </div>
       </div>
+      <div class="tutorial-settings-card">
+        <label class="toggle-row">
+          <input id="tutorial-enabled" type="checkbox" checked />
+          <span>Tutorial hints</span>
+        </label>
+        <button id="replay-tutorial-button" class="primary-button secondary" type="button">Replay Tutorial</button>
+      </div>
+      <div class="controls-reference">
+        <span>Controls</span>
+        <div><b>WASD / Arrows</b><small>Fly</small></div>
+        <div><b>Space</b><small>Tractor Beam</small></div>
+        <div><b>Shift</b><small>Boost</small></div>
+        <div><b>Esc</b><small>Pause</small></div>
+      </div>
       <div class="button-row">
         <button id="main-menu-button" class="primary-button secondary" type="button">Main Menu</button>
         <button id="settings-close" class="primary-button secondary" type="button">Back</button>
@@ -137,6 +166,10 @@
         <button id="play-again-button" class="primary-button" type="button">Play Again</button>
         <button id="choose-level-button" class="primary-button secondary" type="button">Main Menu</button>
       </div>
+    </div>
+    <div id="tutorial-hint" class="panel hidden" aria-live="polite">
+      <strong id="tutorial-title">Move the UFO</strong>
+      <span id="tutorial-copy">WASD or Arrow Keys</span>
     </div>
   </body>
 </html>

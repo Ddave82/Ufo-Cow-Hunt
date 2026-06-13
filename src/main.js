@@ -34,8 +34,13 @@ const breakdownHumanNode = document.querySelector("#breakdown-human");
 const breakdownWavesNode = document.querySelector("#breakdown-waves");
 const breakdownBonusNode = document.querySelector("#breakdown-bonus");
 const breakdownStatsNode = document.querySelector("#breakdown-stats");
+const mainMenuNode = document.querySelector("#main-menu");
+const playButtonNode = document.querySelector("#play-button");
+const selectMissionButtonNode = document.querySelector("#select-mission-button");
+const mainSettingsButtonNode = document.querySelector("#main-settings-button");
 const levelScreenNode = document.querySelector("#level-screen");
 const confirmLevelButtonNode = document.querySelector("#confirm-level-button");
+const missionBackButtonNode = document.querySelector("#mission-back-button");
 const levelCardNodes = [...document.querySelectorAll(".level-card")];
 const startScreenNode = document.querySelector("#start-screen");
 const startKickerNode = document.querySelector("#start-kicker");
@@ -59,6 +64,11 @@ const startMusicVolumeValueNode = document.querySelector("#start-music-volume-va
 const settingsMusicVolumeValueNode = document.querySelector("#settings-music-volume-value");
 const musicEnabledNode = document.querySelector("#music-enabled");
 const difficultyButtonNodes = [...document.querySelectorAll(".difficulty-button")];
+const tutorialEnabledNode = document.querySelector("#tutorial-enabled");
+const replayTutorialButtonNode = document.querySelector("#replay-tutorial-button");
+const tutorialHintNode = document.querySelector("#tutorial-hint");
+const tutorialTitleNode = document.querySelector("#tutorial-title");
+const tutorialCopyNode = document.querySelector("#tutorial-copy");
 const playAgainButtonNode = document.querySelector("#play-again-button");
 const chooseLevelButtonNode = document.querySelector("#choose-level-button");
 
@@ -197,6 +207,21 @@ const difficultyConfigs = {
   normal: { label: "Normal", droneCount: 3 },
   hard: { label: "Hard", droneCount: 4 }
 };
+const UI_STATES = {
+  MAIN_MENU: "MAIN_MENU",
+  MISSION_SELECT: "MISSION_SELECT",
+  SETTINGS: "SETTINGS",
+  MISSION_INTRO: "MISSION_INTRO",
+  PLAYING: "PLAYING",
+  MISSION_COMPLETE: "MISSION_COMPLETE"
+};
+const storageKeys = {
+  selectedMission: "ufoCowHunt.selectedMission",
+  tutorialEnabled: "ufoCowHunt.tutorial.enabled",
+  tutorialVersion: "ufoCowHunt.tutorial.version",
+  tutorialSteps: "ufoCowHunt.tutorial.steps"
+};
+const tutorialVersion = "menu-onboarding-v1";
 const waveConfigs = [
   { number: 1, cowGoal: 10, bonus: 500, timeLimit: 95 },
   { number: 2, cowGoal: 15, bonus: 750, timeLimit: 115 },
@@ -335,8 +360,10 @@ let waveStartedAt = 0;
 let waveTimeRemaining = waveConfigs[0].timeLimit;
 let countdownPlayedForWave = -1;
 let totalCowsCollected = 0;
-let selectedLevelId = "farm";
-let activeLevelId = "farm";
+let selectedLevelId = readStoredMission();
+let activeLevelId = selectedLevelId;
+let uiState = UI_STATES.MAIN_MENU;
+let previousUiState = UI_STATES.MAIN_MENU;
 let waveTransitionActive = false;
 let waveTransitionTimers = [];
 let soundMuted = false;
@@ -353,6 +380,7 @@ let beamAudio = null;
 let beamPreviewAudio = null;
 let takeoffAudio = null;
 let countdownAudio = null;
+let tutorialManager = null;
 let lastAlertSound = 0;
 let lastNoPowerFeedback = -Infinity;
 let lastCollisionFeedback = -Infinity;
@@ -387,7 +415,10 @@ ufo.group.add(beam);
 const cowHint = createCowHint();
 scene.add(cowHint);
 
-applyLevel("farm");
+tutorialManager = createTutorialManager();
+applyLevel(selectedLevelId);
+updateMissionCards();
+setUiState(UI_STATES.MAIN_MENU);
 updateHud(true);
 
 window.addEventListener("resize", onResize);
@@ -399,7 +430,11 @@ window.addEventListener("keyup", (event) => {
 levelCardNodes.forEach((card) => {
   card.addEventListener("click", () => selectLevel(card.dataset.level));
 });
+playButtonNode.addEventListener("click", () => startMission(selectedLevelId));
+selectMissionButtonNode.addEventListener("click", () => setUiState(UI_STATES.MISSION_SELECT));
+mainSettingsButtonNode.addEventListener("click", () => openSettings());
 confirmLevelButtonNode.addEventListener("click", confirmSelectedLevel);
+missionBackButtonNode.addEventListener("click", () => setUiState(UI_STATES.MAIN_MENU));
 startButtonNode.addEventListener("click", startGame);
 playAgainButtonNode.addEventListener("click", playAgain);
 chooseLevelButtonNode.addEventListener("click", returnToMainMenu);
@@ -416,6 +451,13 @@ startMusicVolumeNode?.addEventListener("input", () => setMusicVolume(startMusicV
 settingsMusicVolumeNode.addEventListener("input", () => setMusicVolume(settingsMusicVolumeNode.value));
 difficultyButtonNodes.forEach((button) => {
   button.addEventListener("click", () => setDifficulty(button.dataset.difficulty));
+});
+tutorialEnabledNode.addEventListener("change", () => {
+  tutorialManager.setEnabled(tutorialEnabledNode.checked);
+});
+replayTutorialButtonNode.addEventListener("click", () => {
+  tutorialManager.replay();
+  flashMessage("Tutorial hints reset.");
 });
 musicEnabledNode.addEventListener("change", () => {
   musicEnabled = musicEnabledNode.checked;
@@ -458,14 +500,18 @@ function onKeyDown(event) {
   }
 
   if (key === "Escape" && !event.repeat) {
-    toggleSettings();
+    if (uiState === UI_STATES.SETTINGS) closeSettings();
+    else if (uiState === UI_STATES.PLAYING) openSettings();
+    else if (uiState === UI_STATES.MISSION_SELECT) setUiState(UI_STATES.MAIN_MENU);
     return;
   }
 
-  if (!gameStarted) {
+  if (uiState !== UI_STATES.PLAYING) {
+    keys.clear();
     if ((key === "Space" || key === "Enter") && !event.repeat) {
       event.preventDefault();
-      if (!startScreenNode.classList.contains("hidden")) startGame();
+      if (uiState === UI_STATES.MAIN_MENU) startMission(selectedLevelId);
+      else if (uiState === UI_STATES.MISSION_SELECT) confirmSelectedLevel();
     }
     return;
   }
@@ -476,20 +522,15 @@ function onKeyDown(event) {
   if (key === "Space") {
     beamLatchUntil = performance.now() + 2300;
   }
-
-  if (!firstMove) {
-    firstMove = true;
-    missionStartTime = clock.elapsedTime;
-    messageNode.classList.add("hidden");
-  }
 }
 
 function openSettings() {
-  settingsPanelNode.classList.remove("hidden");
+  previousUiState = uiState === UI_STATES.SETTINGS ? previousUiState : uiState;
+  setUiState(UI_STATES.SETTINGS);
 }
 
 function closeSettings() {
-  settingsPanelNode.classList.add("hidden");
+  setUiState(previousUiState || UI_STATES.MAIN_MENU);
 }
 
 function toggleSettings() {
@@ -498,39 +539,28 @@ function toggleSettings() {
 }
 
 function startGame() {
-  if (gameStarted || gameWon) return;
+  startMission(selectedLevelId);
+}
+
+function startMission(levelId = selectedLevelId) {
+  if (!levelConfigs[levelId]) levelId = "farm";
+  saveSelectedMission(levelId);
+  applyLevel(levelId);
   resetRunState();
   gameStarted = true;
   firstMove = true;
-  missionStartTime = clock.elapsedTime;
-  startWaveTimer(missionStartTime);
-  startScreenNode.classList.add("hidden");
-  settingsPanelNode.classList.add("hidden");
-  messageNode.classList.add("hidden");
   initAudio();
   clock.getDelta();
-  const level = getActiveLevel();
-  const firstWave = waveConfigs[0];
-  showWaveMessage(
-    "WAVE 1 START",
-    `${level.animalPlural.toUpperCase()}: 0 / ${firstWave.cowGoal} - TIME ${formatTime(firstWave.timeLimit)}`,
-    level.waveStartHint
-  );
-  waveTransitionTimers.push(window.setTimeout(() => {
-    messageNode.classList.add("hidden");
-    messageNode.classList.remove("wave-message");
-  }, 1700));
+  showMissionIntro(0, { firstMission: true });
 }
 
 function returnToMainMenu() {
   resetRunState();
   gameStarted = false;
   firstMove = false;
-  levelScreenNode.classList.remove("hidden");
-  startScreenNode.classList.add("hidden");
-  settingsPanelNode.classList.add("hidden");
-  endScreenNode.classList.add("hidden");
+  tutorialManager.cancel();
   messageNode.classList.add("hidden");
+  setUiState(UI_STATES.MAIN_MENU);
   updateHud(true, clock.elapsedTime);
   clock.getDelta();
 }
@@ -538,35 +568,104 @@ function returnToMainMenu() {
 function selectLevel(levelId) {
   if (!levelConfigs[levelId]) return;
   selectedLevelId = levelId;
+  saveSelectedMission(levelId);
+  updateMissionCards();
+  applyLevel(levelId);
+}
+
+function updateMissionCards() {
   levelCardNodes.forEach((card) => {
     const selected = card.dataset.level === selectedLevelId;
     card.classList.toggle("selected", selected);
     card.setAttribute("aria-pressed", selected ? "true" : "false");
   });
-  applyLevel(levelId);
+}
+
+function readStoredMission() {
+  try {
+    const storedMission = window.localStorage.getItem(storageKeys.selectedMission);
+    return levelConfigs[storedMission] ? storedMission : "farm";
+  } catch {
+    return "farm";
+  }
+}
+
+function saveSelectedMission(levelId) {
+  if (!levelConfigs[levelId]) return;
+  selectedLevelId = levelId;
+  try {
+    window.localStorage.setItem(storageKeys.selectedMission, levelId);
+  } catch {
+    // localStorage can be unavailable in embedded browsers.
+  }
+  updateMissionCards();
 }
 
 function confirmSelectedLevel() {
-  applyLevel(selectedLevelId);
-  levelScreenNode.classList.add("hidden");
-  startScreenNode.classList.remove("hidden");
-  endScreenNode.classList.add("hidden");
-  settingsPanelNode.classList.add("hidden");
-  updateStartScreenText();
+  startMission(selectedLevelId);
 }
 
 function playAgain() {
-  applyLevel(selectedLevelId);
-  levelScreenNode.classList.add("hidden");
+  startMission(selectedLevelId);
+}
+
+function setUiState(nextState) {
+  uiState = nextState;
+  document.body.dataset.uiState = nextState;
+
+  mainMenuNode.classList.toggle("hidden", nextState !== UI_STATES.MAIN_MENU);
+  levelScreenNode.classList.toggle("hidden", nextState !== UI_STATES.MISSION_SELECT);
+  settingsPanelNode.classList.toggle("hidden", nextState !== UI_STATES.SETTINGS);
+  endScreenNode.classList.toggle("hidden", nextState !== UI_STATES.MISSION_COMPLETE);
   startScreenNode.classList.add("hidden");
-  endScreenNode.classList.add("hidden");
-  gameStarted = false;
-  gameWon = false;
-  startGame();
+
+  if (nextState !== UI_STATES.PLAYING) {
+    keys.clear();
+    beamLatchUntil = 0;
+  }
+
+  if (nextState === UI_STATES.PLAYING && tutorialManager) {
+    tutorialManager.resume();
+  } else if (tutorialManager) {
+    tutorialManager.hide();
+  }
+}
+
+function showMissionIntro(waveIndex, { firstMission = false } = {}) {
+  clearWaveTransitionTimers();
+  setUiState(UI_STATES.MISSION_INTRO);
+  waveTransitionActive = true;
+  beamActive = false;
+  boostActive = false;
+  beam.visible = false;
+  updateBeamSound(false);
+
+  const level = getActiveLevel();
+  const wave = waveConfigs[waveIndex];
+  const targetText = `${wave.cowGoal} ${level.animalPlural}`.toUpperCase();
+  const introLine = firstMission
+    ? `ABDUCT ${targetText}`
+    : `ABDUCT ${targetText} · TIME LIMIT: ${formatTime(wave.timeLimit)}`;
+  messageNode.classList.add("mission-intro", "wave-message");
+  messageNode.classList.remove("hidden");
+  messageNode.innerHTML = `<strong>${level.displayName}</strong><span>WAVE ${wave.number}</span><small>${introLine}</small>`;
+
+  waveTransitionTimers.push(window.setTimeout(() => {
+    if (waveIndex !== currentWaveIndex) prepareWave(waveIndex);
+    missionStartTime = firstMission ? clock.elapsedTime : missionStartTime;
+    startWaveTimer(clock.elapsedTime);
+    waveTransitionActive = false;
+    setUiState(UI_STATES.PLAYING);
+    messageNode.classList.add("hidden");
+    messageNode.classList.remove("wave-message", "mission-intro");
+    updateHud(true, clock.elapsedTime);
+    if (firstMission) tutorialManager.startMission();
+  }, firstMission ? 2050 : 1650));
 }
 
 function resetRunState() {
   clearWaveTransitionTimers();
+  if (tutorialManager) tutorialManager.cancel();
   gameWon = false;
   beamActive = false;
   boostActive = false;
@@ -765,6 +864,219 @@ function rebuildHazards() {
   energyNode.style.setProperty("--drone-drain-strength", "0");
   document.body.style.setProperty("--drone-drain-strength", "0");
   spawnHazards();
+}
+
+function createTutorialManager() {
+  const defaultSteps = {
+    movement: false,
+    beam: false,
+    energy: false,
+    drone: false,
+    boost: false
+  };
+  let enabled = readTutorialEnabled();
+  let steps = readTutorialSteps();
+  let activeStep = null;
+  let hintTimer = null;
+  let delayTimer = null;
+  let moveInputTime = 0;
+  let beamWasUsed = false;
+  let missionActiveSince = 0;
+  let boostScheduled = false;
+  let replayPending = false;
+
+  if (tutorialEnabledNode) tutorialEnabledNode.checked = enabled;
+
+  function readTutorialEnabled() {
+    try {
+      const stored = window.localStorage.getItem(storageKeys.tutorialEnabled);
+      return stored === null ? true : stored === "true";
+    } catch {
+      return true;
+    }
+  }
+
+  function readTutorialSteps() {
+    try {
+      const version = window.localStorage.getItem(storageKeys.tutorialVersion);
+      if (version !== tutorialVersion) return { ...defaultSteps };
+      const parsed = JSON.parse(window.localStorage.getItem(storageKeys.tutorialSteps) || "{}");
+      return { ...defaultSteps, ...parsed };
+    } catch {
+      return { ...defaultSteps };
+    }
+  }
+
+  function save() {
+    try {
+      window.localStorage.setItem(storageKeys.tutorialVersion, tutorialVersion);
+      window.localStorage.setItem(storageKeys.tutorialSteps, JSON.stringify(steps));
+      window.localStorage.setItem(storageKeys.tutorialEnabled, String(enabled));
+    } catch {
+      // localStorage can be unavailable in embedded browsers.
+    }
+  }
+
+  function canShow() {
+    return enabled && gameStarted && !gameWon && uiState === UI_STATES.PLAYING && !waveTransitionActive;
+  }
+
+  function isComplete() {
+    return Object.values(steps).every(Boolean);
+  }
+
+  function schedule(callback, delay) {
+    window.clearTimeout(delayTimer);
+    delayTimer = window.setTimeout(() => {
+      delayTimer = null;
+      callback();
+    }, delay);
+  }
+
+  function show(step, title, copy, { duration = 5200, completeOnHide = false } = {}) {
+    if (!canShow() || steps[step] || activeStep) return;
+    activeStep = step;
+    tutorialTitleNode.textContent = title;
+    tutorialCopyNode.textContent = copy;
+    tutorialHintNode.classList.remove("hidden");
+    window.clearTimeout(hintTimer);
+    hintTimer = window.setTimeout(() => {
+      hide();
+      if (completeOnHide) complete(step);
+    }, duration);
+  }
+
+  function hide() {
+    window.clearTimeout(hintTimer);
+    hintTimer = null;
+    activeStep = null;
+    tutorialHintNode.classList.add("hidden");
+  }
+
+  function complete(step) {
+    if (!steps[step]) {
+      steps[step] = true;
+      save();
+    }
+    if (activeStep === step) hide();
+
+    if (step === "movement" && !steps.beam) {
+      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target"), 700);
+    }
+    if (step === "beam" && !steps.boost && !boostScheduled) {
+      boostScheduled = true;
+      schedule(() => show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost"), 4200);
+    }
+  }
+
+  function startMission() {
+    if (!enabled || isComplete()) return;
+    replayPending = false;
+    hide();
+    window.clearTimeout(delayTimer);
+    moveInputTime = 0;
+    beamWasUsed = false;
+    missionActiveSince = clock.elapsedTime;
+    boostScheduled = false;
+    if (!steps.movement) {
+      schedule(() => show("movement", "MOVE THE UFO", "WASD or Arrow Keys"), 950);
+    } else if (!steps.beam) {
+      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target"), 950);
+    }
+  }
+
+  function event(name, payload = {}) {
+    if (!enabled || isComplete()) return;
+    if (!canShow() && name !== "missionEnded") return;
+
+    if (name === "movementInput" && !steps.movement) {
+      moveInputTime += payload.delta || 0;
+      if (moveInputTime > 0.72) complete("movement");
+    }
+
+    if (name === "beamUsed") {
+      beamWasUsed = true;
+      if (!steps.energy && beamEnergy < 70) {
+        show("energy", "BEAM ENERGY", "Collect diamonds to recharge", { duration: 6500 });
+      }
+    }
+
+    if (name === "targetAbducted") {
+      complete("beam");
+      if (!steps.boost && !boostScheduled) {
+        boostScheduled = true;
+        schedule(() => show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost"), 5200);
+      }
+    }
+
+    if (name === "energyLow" && beamWasUsed && !steps.energy) {
+      show("energy", "BEAM ENERGY", "Collect diamonds to recharge", { duration: 6500 });
+    }
+
+    if (name === "energyCollected") {
+      complete("energy");
+    }
+
+    if (name === "droneDetected" && difficulty !== "easy" && !steps.drone) {
+      show("drone", "DRONE ALERT", "Avoid search drones - they drain energy", {
+        duration: 5200,
+        completeOnHide: true
+      });
+    }
+
+    if (name === "boostUsed") {
+      complete("boost");
+    }
+
+    if (
+      name === "tick" &&
+      !steps.boost &&
+      !boostScheduled &&
+      clock.elapsedTime - missionActiveSince > 24
+    ) {
+      boostScheduled = true;
+      show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost");
+    }
+
+    if (name === "missionEnded") cancel();
+  }
+
+  function cancel() {
+    window.clearTimeout(delayTimer);
+    delayTimer = null;
+    hide();
+  }
+
+  function setEnabled(value) {
+    enabled = Boolean(value);
+    if (tutorialEnabledNode) tutorialEnabledNode.checked = enabled;
+    if (!enabled) cancel();
+    save();
+  }
+
+  function replay() {
+    steps = { ...defaultSteps };
+    enabled = true;
+    replayPending = true;
+    if (tutorialEnabledNode) tutorialEnabledNode.checked = true;
+    save();
+    cancel();
+    if (canShow()) startMission();
+  }
+
+  function resume() {
+    if (replayPending && canShow()) startMission();
+  }
+
+  return {
+    startMission,
+    event,
+    cancel,
+    hide,
+    setEnabled,
+    replay,
+    resume
+  };
 }
 
 function normalizeKey(event) {
@@ -3563,13 +3875,15 @@ function createPatrolDrone(index) {
 function tick() {
   const delta = Math.min(clock.getDelta(), 0.033);
   const elapsed = clock.elapsedTime;
+  const gameplayActive = gameStarted && !gameWon && uiState === UI_STATES.PLAYING && !waveTransitionActive;
 
-  if (gameStarted && !gameWon) {
+  if (gameplayActive) {
     updateUfo(delta, elapsed);
     updateBeam(delta, elapsed);
     updatePowerups(delta, elapsed, true);
     updateHazards(delta, elapsed, true);
     updateWaveTimer(elapsed);
+    tutorialManager.event("tick");
   } else {
     beam.visible = false;
     beamActive = false;
@@ -3605,6 +3919,13 @@ function updateUfo(delta, elapsed) {
     (keys.has("ShiftLeft") || keys.has("ShiftRight")) &&
     beamEnergy > 14;
   boostActive = boosting;
+
+  if (moving || turnInput !== 0) {
+    tutorialManager.event("movementInput", { delta });
+  }
+  if (boosting) {
+    tutorialManager.event("boostUsed");
+  }
 
   if (turnInput !== 0) {
     const turnRate = boosting ? 1.25 : 1.65;
@@ -3715,6 +4036,10 @@ function updateBeam(delta, elapsed) {
   beamActive = wantsBeam && hasBeamPower && !waveTransitionActive;
   beam.visible = beamActive;
 
+  if (wantsBeam) {
+    tutorialManager.event("beamUsed");
+  }
+
   if (!beamActive) {
     abductingTarget = null;
     if (wantsBeam && !hasBeamPower) {
@@ -3727,6 +4052,7 @@ function updateBeam(delta, elapsed) {
   }
 
   beamEnergy = Math.max(0, beamEnergy - delta * (abductingTarget ? 14 : 10));
+  if (beamEnergy < 70) tutorialManager.event("energyLow");
   beam.scale.setScalar(0.94 + Math.sin(elapsed * 12) * 0.035);
   const target =
     abductingTarget && !abductingTarget.userData.collected
@@ -3804,6 +4130,7 @@ function collectTarget(target) {
     totalCowsCollected += 1;
     if (waveCowsCollected >= waveCowGoal) completeWave(now);
   }
+  tutorialManager.event("targetAbducted", { type: target.userData.type });
   updateHud(true, now);
 }
 
@@ -3970,6 +4297,7 @@ function updatePowerups(delta, elapsed, active = true) {
       alertLevel = Math.max(0, alertLevel - 18);
       playPowerupSound();
       flashMessage("Energy core: +50, beam recharged");
+      tutorialManager.event("energyCollected");
       updateHud(true, elapsed);
     }
   }
@@ -4022,6 +4350,7 @@ function updateHazards(delta, elapsed, active = true) {
   if (active && detected) {
     droneDrainUntil = elapsed + 0.25;
     droneDrainStrength = THREE.MathUtils.lerp(droneDrainStrength, strongestLock, 0.45);
+    tutorialManager.event("droneDetected");
   }
 
   if (active && detected && elapsed - lastAlertSound > 0.54) {
@@ -4086,6 +4415,7 @@ function updateHud(force = false, elapsed = clock.elapsedTime) {
   if (elapsed < droneDrainUntil) dangerStatusNode.textContent = "Energy draining!";
   else if (alertLevel > 70) dangerStatusNode.textContent = level.alarmText;
   else if (alertLevel > 32) dangerStatusNode.textContent = "Patrol nearby";
+  else if (gameStarted && uiState === UI_STATES.PLAYING && elapsed - missionStartTime < 8) dangerStatusNode.textContent = "Mission active";
   else dangerStatusNode.textContent = bonusCollected ? "Bonus found" : level.calmText;
 
   const energyPercent = Math.round(beamEnergy);
@@ -4105,6 +4435,7 @@ function completeWave(elapsed) {
   score += completedWave.bonus;
   scoreBreakdown.waveBonusScore += completedWave.bonus;
   waveTransitionActive = true;
+  setUiState(UI_STATES.MISSION_INTRO);
   beamActive = false;
   abductingTarget = null;
   beam.visible = false;
@@ -4138,6 +4469,7 @@ function completeWave(elapsed) {
     prepareWave(currentWaveIndex + 1);
     startWaveTimer(clock.elapsedTime);
     waveTransitionActive = false;
+    setUiState(UI_STATES.PLAYING);
     messageNode.classList.add("hidden");
     messageNode.classList.remove("wave-message");
     updateHud(true, clock.elapsedTime);
@@ -4150,6 +4482,7 @@ function timeoutWave(elapsed) {
   stopCountdownSound();
   waveTimeRemaining = 0;
   waveTransitionActive = true;
+  setUiState(UI_STATES.MISSION_INTRO);
   beamActive = false;
   abductingTarget = null;
   beam.visible = false;
@@ -4180,6 +4513,7 @@ function timeoutWave(elapsed) {
     prepareWave(currentWaveIndex + 1);
     startWaveTimer(clock.elapsedTime);
     waveTransitionActive = false;
+    setUiState(UI_STATES.PLAYING);
     messageNode.classList.add("hidden");
     messageNode.classList.remove("wave-message");
     updateHud(true, clock.elapsedTime);
@@ -4189,6 +4523,7 @@ function timeoutWave(elapsed) {
 function showWaveMessage(title, lineOne, lineTwo = "") {
   window.clearTimeout(flashMessage.timeout);
   messageNode.classList.add("wave-message");
+  messageNode.classList.remove("mission-intro");
   messageNode.classList.remove("hidden");
   messageNode.innerHTML = `<strong>${title}</strong><span>${lineOne}</span>${lineTwo ? `<small>${lineTwo}</small>` : ""}`;
 }
@@ -4198,7 +4533,7 @@ function clearWaveTransitionTimers() {
   waveTransitionTimers = [];
   window.clearTimeout(flashMessage.timeout);
   stopCountdownSound();
-  messageNode.classList.remove("wave-message");
+  messageNode.classList.remove("wave-message", "mission-intro");
 }
 
 function finishMission(elapsed, { completed = true } = {}) {
@@ -4206,6 +4541,7 @@ function finishMission(elapsed, { completed = true } = {}) {
   clearWaveTransitionTimers();
   stopCountdownSound();
   updateBeamSound(false);
+  tutorialManager.event("missionEnded");
   gameWon = true;
   missionEndTime = elapsed;
   takeoffUntil = completed ? elapsed + 4.2 : elapsed;
@@ -4220,7 +4556,7 @@ function finishMission(elapsed, { completed = true } = {}) {
   finalTimeNode.textContent = `Time: ${formatTime(missionEndTime - missionStartTime)}`;
   finalScoreNode.textContent = `Score: ${score.toLocaleString("en-US")}`;
   updateFinalBreakdown();
-  endScreenNode.classList.remove("hidden");
+  setUiState(UI_STATES.MISSION_COMPLETE);
   flashMessage(completed ? "Mission complete. All targets collected." : "Time up. Score locked.");
   if (completed) {
     playTakeoffSound();
@@ -4845,7 +5181,7 @@ function playNoiseBurst(duration = 0.12, volume = 0.02, delay = 0) {
 }
 
 function flashMessage(text) {
-  messageNode.classList.remove("wave-message");
+  messageNode.classList.remove("wave-message", "mission-intro");
   messageNode.classList.remove("hidden");
   messageNode.innerHTML = `<strong>${text}</strong><span>W/Up to thrust, A/D or arrows to turn, S/Down to brake, Space to beam.</span>`;
   window.clearTimeout(flashMessage.timeout);
