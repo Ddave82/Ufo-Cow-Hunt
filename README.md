@@ -133,3 +133,15 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 ## Status
 
 Playable prototype with three mission zones, timed waves, scoring, drone pressure, and local audio assets.
+
+## Changelog
+
+- Tuned the large Arctic iceberg collision radius so the UFO collides closer to the visible mesh.
+- Added collision to the large Arctic iceberg.
+- Added an additional small iceberg to the Arctic level.
+- Added Arctic landmarks and improved the frozen level atmosphere.
+
+## Roadmap
+
+- Terrain optimization
+- Add a 3D landmark to the green zone
