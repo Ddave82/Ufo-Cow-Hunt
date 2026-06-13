@@ -340,7 +340,7 @@ const levelConfigs = {
     water: iceWaterBodies,
     blockers: iceSpawnBlockers,
     colliders: [
-      { x: iceLandmarks.mainIceberg.x, z: iceLandmarks.mainIceberg.z, radius: 16.5, label: "iceberg" }
+      { x: iceLandmarks.mainIceberg.x, z: iceLandmarks.mainIceberg.z, radius: 12.5, label: "iceberg" }
     ],
     powerupSpots: [
       [-60, 60],
