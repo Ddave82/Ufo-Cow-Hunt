@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Increased the energy crystal pickup sound and lowered the default music volume.
 - Changed energy crystals to float at UFO flight height and collect on contact without the beam.
 - Added Easy, Normal, and Hard difficulty settings for drone count.
 - Reduced drone detection radius slightly.

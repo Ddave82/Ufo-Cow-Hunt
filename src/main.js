@@ -340,7 +340,7 @@ let waveTransitionActive = false;
 let waveTransitionTimers = [];
 let soundMuted = false;
 let effectsVolume = 1;
-let musicVolume = 0.9;
+let musicVolume = 0.75;
 let musicEnabled = true;
 let difficulty = readStoredDifficulty();
 let audio = null;
@@ -4726,8 +4726,10 @@ function playCowCollectSound() {
 }
 
 function playPowerupSound() {
-  playSweep(340, 980, 0.34, "sine", 0.028);
-  playTone(1320, 0.18, "triangle", 0.018, 0.16);
+  playSweep(340, 980, 0.34, "sine", 0.065);
+  playTone(1320, 0.18, "triangle", 0.045, 0.12);
+  playTone(1780, 0.12, "sine", 0.032, 0.22);
+  playNoiseBurst(0.12, 0.026, 0.05);
 }
 
 function playAlertSound(strength = 0.5, drainAmount = 0) {
