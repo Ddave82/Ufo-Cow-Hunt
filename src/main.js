@@ -871,6 +871,7 @@ function createTutorialManager() {
   let hintTimer = null;
   let delayTimer = null;
   let moveInputTime = 0;
+  let moveAfterBeamTime = 0;
   let beamWasUsed = false;
   let missionActiveSince = 0;
   let boostScheduled = false;
@@ -911,10 +912,6 @@ function createTutorialManager() {
     return enabled && gameStarted && !gameWon && uiState === UI_STATES.PLAYING && !waveTransitionActive;
   }
 
-  function isComplete() {
-    return Object.values(steps).every(Boolean);
-  }
-
   function schedule(callback, delay) {
     window.clearTimeout(delayTimer);
     delayTimer = window.setTimeout(() => {
@@ -924,7 +921,7 @@ function createTutorialManager() {
   }
 
   function show(step, title, copy, { duration = 5200, completeOnHide = false, force = false } = {}) {
-    if (!canShow() || (!force && steps[step]) || activeStep) return;
+    if (!canShow() || (!force && steps[step]) || activeStep) return false;
     activeStep = step;
     tutorialTitleNode.textContent = title;
     tutorialCopyNode.textContent = copy;
@@ -934,6 +931,23 @@ function createTutorialManager() {
       hide();
       if (completeOnHide) complete(step);
     }, duration);
+    return true;
+  }
+
+  function queueBoostHint(delay = 450) {
+    if (boostScheduled || steps.boost) return;
+    boostScheduled = true;
+    schedule(() => {
+      if (steps.boost) {
+        boostScheduled = false;
+        return;
+      }
+      const shown = show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost", { force: true });
+      if (!shown && canShow() && !steps.boost) {
+        boostScheduled = false;
+        queueBoostHint(900);
+      }
+    }, delay);
   }
 
   function hide() {
@@ -950,12 +964,8 @@ function createTutorialManager() {
     }
     if (activeStep === step) hide();
 
-    if (step === "movement" && !steps.beam) {
-      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target"), 700);
-    }
-    if (step === "beam" && !steps.boost && !boostScheduled) {
-      boostScheduled = true;
-      schedule(() => show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost"), 4200);
+    if (step === "movement") {
+      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target", { force: true }), 700);
     }
   }
 
@@ -964,22 +974,18 @@ function createTutorialManager() {
     hide();
     window.clearTimeout(delayTimer);
     moveInputTime = 0;
+    moveAfterBeamTime = 0;
     beamWasUsed = false;
     missionActiveSince = clock.elapsedTime;
     boostScheduled = false;
-    schedule(() => {
-      const level = getActiveLevel();
-      show(
-        "mission-start",
-        `${level.animalTitle.toUpperCase()} HUNT`,
-        "WASD / Arrows fly · SPACE beams · touch energy cores",
-        { duration: 5600, force: true }
-      );
-    }, 750);
+    steps.movement = false;
+    steps.beam = false;
+    steps.boost = false;
+    schedule(() => show("movement", "MOVE THE UFO", "WASD or Arrow Keys", { force: true }), 750);
   }
 
   function event(name, payload = {}) {
-    if (!enabled || isComplete()) return;
+    if (!enabled) return;
     if (!canShow() && name !== "missionEnded") return;
 
     if (name === "movementInput" && !steps.movement) {
@@ -987,8 +993,16 @@ function createTutorialManager() {
       if (moveInputTime > 0.72) complete("movement");
     }
 
+    if (name === "movementInput" && beamWasUsed && steps.beam && !steps.boost && !boostScheduled) {
+      moveAfterBeamTime += payload.delta || 0;
+      if (moveAfterBeamTime > 0.85) {
+        queueBoostHint();
+      }
+    }
+
     if (name === "beamUsed") {
       beamWasUsed = true;
+      if (!steps.beam) complete("beam");
       if (!steps.energy && beamEnergy < 70) {
         show("energy", "BEAM ENERGY", "Collect diamonds to recharge", { duration: 6500 });
       }
@@ -996,10 +1010,6 @@ function createTutorialManager() {
 
     if (name === "targetAbducted") {
       complete("beam");
-      if (!steps.boost && !boostScheduled) {
-        boostScheduled = true;
-        schedule(() => show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost"), 5200);
-      }
     }
 
     if (name === "energyLow" && beamWasUsed && !steps.energy) {
@@ -1025,10 +1035,10 @@ function createTutorialManager() {
       name === "tick" &&
       !steps.boost &&
       !boostScheduled &&
+      beamWasUsed &&
       clock.elapsedTime - missionActiveSince > 24
     ) {
-      boostScheduled = true;
-      show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost");
+      queueBoostHint(0);
     }
 
     if (name === "missionEnded") cancel();
