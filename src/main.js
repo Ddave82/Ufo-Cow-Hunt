@@ -144,7 +144,7 @@ const farmWaterBodies = [
 const desertWaterBodies = [];
 const farmLandmarks = {
   mountain: { x: -58, z: 14, rx: 21, rz: 18 },
-  windmill: { x: 58, z: -24, rx: 10, rz: 10, rotation: -0.52 }
+  windmill: { x: 6, z: -47, rx: 10, rz: 10, rotation: 3.05 }
 };
 const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 },
