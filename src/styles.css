@@ -71,6 +71,10 @@ body[data-ui-state="MISSION_COMPLETE"] .icon-button {
   pointer-events: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 #hud {
   position: fixed;
   top: 18px;
@@ -173,11 +177,15 @@ body[data-ui-state="MISSION_COMPLETE"] .icon-button {
 
 .status {
   display: grid;
-  gap: 8px;
-  min-width: 178px;
-  padding: 12px 14px;
+  gap: 9px;
+  min-width: 205px;
+  padding: 14px 16px;
   border-radius: 8px;
   text-align: right;
+}
+
+.status span {
+  font-size: 0.82rem;
 }
 
 #radar {
@@ -815,6 +823,10 @@ body[data-preview-level="ice"] .menu-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.button-row.single-action {
+  grid-template-columns: 1fr;
 }
 
 .menu-panel.hidden,

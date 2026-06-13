@@ -108,6 +108,8 @@ const ufoCruiseHeight = 10.6;
 const energyCoreHoverHeight = ufoCruiseHeight + 0.25;
 const ufoPickupRadius = 3.6;
 const energyCorePickupRadius = 1.35;
+const activeEnergyCoresPerWave = 3;
+const energyCoreMinSpawnDistance = 32;
 const desertPyramid = { x: 21, z: -10, radius: 17, plateauRadius: 20, blendRadius: 28, baseHeight: 0.8 };
 const desertOases = [
   { x: -48, z: 20, rx: 7.2, rz: 4.2 },
@@ -521,11 +523,18 @@ function onKeyDown(event) {
 
 function openSettings() {
   previousUiState = uiState === UI_STATES.SETTINGS ? previousUiState : uiState;
+  updateSettingsActions();
   setUiState(UI_STATES.SETTINGS);
 }
 
 function closeSettings() {
   setUiState(previousUiState || UI_STATES.MAIN_MENU);
+}
+
+function updateSettingsActions() {
+  const showMainMenuAction = previousUiState === UI_STATES.PLAYING;
+  mainMenuButtonNode.classList.toggle("hidden", !showMainMenuAction);
+  mainMenuButtonNode.parentElement.classList.toggle("single-action", !showMainMenuAction);
 }
 
 function toggleSettings() {
@@ -699,12 +708,6 @@ function resetRunState() {
   beam.visible = false;
 
   prepareWave(0);
-
-  powerups.forEach((item) => {
-    item.userData.collected = false;
-    item.visible = true;
-    item.position.y = item.userData.baseY;
-  });
 }
 
 function applyLevel(levelId) {
@@ -920,8 +923,8 @@ function createTutorialManager() {
     }, delay);
   }
 
-  function show(step, title, copy, { duration = 5200, completeOnHide = false } = {}) {
-    if (!canShow() || steps[step] || activeStep) return;
+  function show(step, title, copy, { duration = 5200, completeOnHide = false, force = false } = {}) {
+    if (!canShow() || (!force && steps[step]) || activeStep) return;
     activeStep = step;
     tutorialTitleNode.textContent = title;
     tutorialCopyNode.textContent = copy;
@@ -957,18 +960,22 @@ function createTutorialManager() {
   }
 
   function startMission() {
-    if (!enabled || isComplete()) return;
+    if (!enabled) return;
     hide();
     window.clearTimeout(delayTimer);
     moveInputTime = 0;
     beamWasUsed = false;
     missionActiveSince = clock.elapsedTime;
     boostScheduled = false;
-    if (!steps.movement) {
-      schedule(() => show("movement", "MOVE THE UFO", "WASD or Arrow Keys"), 950);
-    } else if (!steps.beam) {
-      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target"), 950);
-    }
+    schedule(() => {
+      const level = getActiveLevel();
+      show(
+        "mission-start",
+        `${level.animalTitle.toUpperCase()} HUNT`,
+        "WASD / Arrows fly · SPACE beams · touch energy cores",
+        { duration: 5600, force: true }
+      );
+    }, 750);
   }
 
   function event(name, payload = {}) {
@@ -3197,6 +3204,8 @@ function prepareWave(waveIndex) {
     positionCollectible(item, "bonus", bonusSpot.x, bonusSpot.z);
     resetCollectibleState(item, true);
   });
+
+  resetWavePowerups();
 }
 
 function getCurrentWaveConfig() {
@@ -3612,10 +3621,58 @@ function spawnPowerups() {
     const safeSpot = findDrySpot(x, z, index + 120);
     const powerup = createEnergyCore();
     powerup.position.set(safeSpot.x, terrainHeight(safeSpot.x, safeSpot.z) + energyCoreHoverHeight, safeSpot.z);
-    powerup.userData = { collected: false, baseY: powerup.position.y };
+    powerup.userData = { collected: true, baseY: powerup.position.y };
+    powerup.visible = false;
     powerups.push(powerup);
     addLevelObject(powerup);
   });
+}
+
+function resetWavePowerups() {
+  const spots = generatePowerupSpawnSpots(activeEnergyCoresPerWave);
+
+  powerups.forEach((powerup, index) => {
+    const spot = spots[index];
+    const active = Boolean(spot);
+    powerup.userData.collected = !active;
+    powerup.visible = active;
+
+    if (!active) return;
+
+    powerup.position.set(spot.x, terrainHeight(spot.x, spot.z) + energyCoreHoverHeight, spot.z);
+    powerup.userData.baseY = powerup.position.y;
+    powerup.rotation.set(0, Math.random() * Math.PI * 2, 0);
+  });
+}
+
+function generatePowerupSpawnSpots(count) {
+  const baseSpots = getActiveLevel().powerupSpots;
+  const used = [];
+  const offset = (currentWaveIndex * 2 + Math.floor(Math.random() * baseSpots.length)) % baseSpots.length;
+
+  for (let index = 0; index < baseSpots.length && used.length < count; index += 1) {
+    const [x, z] = baseSpots[(index + offset) % baseSpots.length];
+    const spot = findPowerupSpawnSpot(x, z, used, index + currentWaveIndex * 17);
+    if (spot) used.push(spot);
+  }
+
+  return used;
+}
+
+function findPowerupSpawnSpot(x, z, used, seed = 0) {
+  for (let attempt = 0; attempt < 54; attempt += 1) {
+    const angle = seed * 1.43 + attempt * 1.78;
+    const radius = attempt === 0 ? 0 : 8 + attempt * 0.82;
+    const candidateX = x + Math.cos(angle) * radius;
+    const candidateZ = z + Math.sin(angle) * radius;
+
+    if (Math.abs(candidateX) > halfWorld - 13 || Math.abs(candidateZ) > halfWorld - 13) continue;
+    if (!isSpawnCandidateSafe(candidateX, candidateZ, used, energyCoreMinSpawnDistance)) continue;
+    const safeSpot = findDrySpot(candidateX, candidateZ, seed + attempt + 130);
+    if (isSpawnCandidateSafe(safeSpot.x, safeSpot.z, used, energyCoreMinSpawnDistance * 0.9)) return safeSpot;
+  }
+
+  return null;
 }
 
 function findDrySpot(x, z, seed = 0) {
@@ -5150,10 +5207,10 @@ function playNoiseBurst(duration = 0.12, volume = 0.02, delay = 0) {
   source.start(start);
 }
 
-function flashMessage(text) {
+function flashMessage(text, detail = "") {
   messageNode.classList.remove("wave-message", "mission-intro");
   messageNode.classList.remove("hidden");
-  messageNode.innerHTML = `<strong>${text}</strong><span>W/Up to thrust, A/D or arrows to turn, S/Down to brake, Space to beam.</span>`;
+  messageNode.innerHTML = `<strong>${text}</strong>${detail ? `<span>${detail}</span>` : ""}`;
   window.clearTimeout(flashMessage.timeout);
   flashMessage.timeout = window.setTimeout(() => {
     if (firstMove) messageNode.classList.add("hidden");
