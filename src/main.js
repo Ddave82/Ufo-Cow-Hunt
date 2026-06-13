@@ -2930,7 +2930,7 @@ function updateWaveTimer(elapsed) {
   const config = getCurrentWaveConfig();
   waveTimeRemaining = Math.max(0, config.timeLimit - (elapsed - waveStartedAt));
 
-  if (waveTimeRemaining <= 10 && countdownPlayedForWave !== currentWaveIndex) {
+  if (waveTimeRemaining <= 11 && countdownPlayedForWave !== currentWaveIndex) {
     countdownPlayedForWave = currentWaveIndex;
     playCountdownSound();
   }
