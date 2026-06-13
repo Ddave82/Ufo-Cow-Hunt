@@ -944,7 +944,7 @@ function createTutorialManager() {
         boostScheduled = false;
         return;
       }
-      const shown = show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost", { force: true });
+      const shown = show("boost", "NEED MORE SPEED?", "Hold SHIFT to boost", { force: true, persistent: true });
       if (!shown && canShow() && !steps.boost) {
         boostScheduled = false;
         queueBoostHint(900);
