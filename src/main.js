@@ -97,7 +97,8 @@ const halfWorld = worldSize / 2;
 const terrainSegments = 112;
 const ufoCruiseHeight = 10.6;
 const energyCoreHoverHeight = ufoCruiseHeight + 0.25;
-const energyCorePickupRadius = 3.4;
+const ufoPickupRadius = 3.6;
+const energyCorePickupRadius = 1.35;
 const desertPyramid = { x: 21, z: -10, radius: 17, plateauRadius: 20, blendRadius: 28, baseHeight: 0.8 };
 const desertOases = [
   { x: -48, z: 20, rx: 7.2, rz: 4.2 },
@@ -3959,7 +3960,7 @@ function updatePowerups(delta, elapsed, active = true) {
     powerup.rotation.y += delta * 2.1;
     powerup.children[1].rotation.z += delta * 1.9;
 
-    if (active && powerup.position.distanceTo(ufo.group.position) < energyCorePickupRadius) {
+    if (active && powerup.position.distanceTo(ufo.group.position) < ufoPickupRadius + energyCorePickupRadius) {
       powerup.userData.collected = true;
       powerup.visible = false;
       score += 50;
