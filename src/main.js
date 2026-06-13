@@ -812,12 +812,7 @@ function setMusicVolume(value) {
 }
 
 function readStoredDifficulty() {
-  try {
-    const storedDifficulty = window.localStorage.getItem("ufoCowHuntDifficulty");
-    return difficultyConfigs[storedDifficulty] ? storedDifficulty : "normal";
-  } catch {
-    return "normal";
-  }
+  return "normal";
 }
 
 function setDifficulty(value, { persist = true, rebuild = true } = {}) {
