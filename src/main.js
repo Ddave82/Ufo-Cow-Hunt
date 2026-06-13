@@ -143,12 +143,12 @@ const farmWaterBodies = [
 ];
 const desertWaterBodies = [];
 const farmLandmarks = {
-  mountain: { x: -58, z: 14, rx: 21, rz: 18 },
+  silo: { x: 70, z: -68, rx: 8, rz: 8 },
   windmill: { x: 6, z: -47, rx: 10, rz: 10, rotation: 3.05 }
 };
 const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 },
-  farmLandmarks.mountain,
+  farmLandmarks.silo,
   farmLandmarks.windmill
 ];
 const desertSpawnBlockers = [
@@ -275,9 +275,7 @@ const levelConfigs = {
     water: farmWaterBodies,
     blockers: farmSpawnBlockers,
     colliders: [
-      { x: farmLandmarks.mountain.x, z: farmLandmarks.mountain.z, radius: 14.6, label: "mountain" },
-      { x: farmLandmarks.mountain.x + 9, z: farmLandmarks.mountain.z - 5, radius: 8.2, label: "mountain" },
-      { x: farmLandmarks.mountain.x - 5, z: farmLandmarks.mountain.z + 8, radius: 7.8, label: "mountain" },
+      { x: farmLandmarks.silo.x, z: farmLandmarks.silo.z, radius: 5.6, label: "silo" },
       { x: farmLandmarks.windmill.x, z: farmLandmarks.windmill.z, radius: 6.2, label: "windmill" }
     ],
     powerupSpots: [
@@ -2826,7 +2824,7 @@ function addFenceRail(group, railGeometry, material, x1, z1, x2, z2, heightOffse
 }
 
 function addFarmDetails() {
-  addFarmMountain();
+  addGrainSilo();
   addWindmill();
   addPastureFences();
   addBarn(48, 48, -0.34);
@@ -2836,80 +2834,79 @@ function addFarmDetails() {
   addGrassClumps();
 }
 
-function addFarmMountain() {
-  const { x, z } = farmLandmarks.mountain;
+function addGrainSilo() {
+  const { x, z } = farmLandmarks.silo;
   const group = new THREE.Group();
-  const grassMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2f6a38,
-    emissive: 0x061407,
-    roughness: 0.96,
+  const metalMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb7b5a7,
+    emissive: 0x10100b,
+    roughness: 0.62,
+    metalness: 0.18,
     flatShading: true
   });
-  const darkGrassMaterial = new THREE.MeshStandardMaterial({
-    color: 0x214f2f,
-    roughness: 0.98,
+  const roofMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8c7a4c,
+    emissive: 0x161005,
+    roughness: 0.78,
+    metalness: 0.08,
     flatShading: true
   });
-  const rockMaterial = new THREE.MeshStandardMaterial({
-    color: 0x55594f,
-    roughness: 0.94,
-    flatShading: true
-  });
+  const bandMaterial = new THREE.MeshStandardMaterial({ color: 0x4c4335, roughness: 0.82 });
+  const ladderMaterial = new THREE.MeshStandardMaterial({ color: 0x2d241d, roughness: 0.88 });
   const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x0b1510,
+    color: 0x07100b,
     transparent: true,
-    opacity: 0.18,
+    opacity: 0.2,
     depthWrite: false
   });
 
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(24, 24), shadowMaterial);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(6.6, 18), shadowMaterial);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.04;
-  shadow.scale.set(1.15, 0.82, 1);
 
-  const base = new THREE.Mesh(new THREE.ConeGeometry(17, 18, 7), grassMaterial);
-  base.position.y = 9;
-  base.scale.set(1.22, 1, 0.9);
-  base.rotation.y = -0.38;
-  base.castShadow = true;
-  base.receiveShadow = true;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(3.15, 3.35, 12.6, 14), metalMaterial);
+  body.position.y = 6.3;
+  body.castShadow = true;
+  body.receiveShadow = true;
 
-  const rearRidge = new THREE.Mesh(new THREE.ConeGeometry(9, 12, 6), darkGrassMaterial);
-  rearRidge.position.set(-7, 6, 6);
-  rearRidge.scale.set(1.15, 0.92, 0.82);
-  rearRidge.rotation.y = 0.28;
-  rearRidge.castShadow = true;
-  rearRidge.receiveShadow = true;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.95, 2.25, 14), roofMaterial);
+  roof.position.y = 13.55;
+  roof.castShadow = true;
 
-  const sideRidge = new THREE.Mesh(new THREE.ConeGeometry(8, 11, 6), grassMaterial);
-  sideRidge.position.set(9, 5.5, -5);
-  sideRidge.scale.set(1.05, 0.9, 0.78);
-  sideRidge.rotation.y = -0.95;
-  sideRidge.castShadow = true;
-  sideRidge.receiveShadow = true;
-
-  const cap = new THREE.Mesh(new THREE.ConeGeometry(5.2, 8.2, 6), rockMaterial);
-  cap.position.set(0.8, 18.2, -0.6);
-  cap.scale.set(0.8, 0.92, 0.72);
-  cap.rotation.y = 0.14;
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.55, 8), bandMaterial);
+  cap.position.y = 14.95;
   cap.castShadow = true;
 
-  [
-    [-3.8, 8.2, -8.7, 4.8, 7.4, 0.45, -0.28],
-    [5.8, 6.4, 5.2, 4.2, 5.8, -0.7, 0.32],
-    [-10.5, 4.8, 0.4, 3.6, 5.2, 1.05, -0.1],
-    [9.8, 4.2, -1.4, 3.3, 4.8, -1.22, 0.18]
-  ].forEach(([px, py, pz, sx, sy, ry, rz], index) => {
-    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), rockMaterial);
-    rock.position.set(px, py, pz);
-    rock.scale.set(sx, sy, 0.45);
-    rock.rotation.set(0.18 + index * 0.08, ry, rz);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    group.add(rock);
+  [2.2, 6.1, 9.95].forEach((height) => {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(3.23, 0.055, 6, 28), bandMaterial);
+    band.position.y = height;
+    band.rotation.x = Math.PI / 2;
+    band.castShadow = true;
+    group.add(band);
   });
 
-  group.add(shadow, base, rearRidge, sideRidge, cap);
+  for (let i = 0; i < 5; i += 1) {
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.08, 0.08), ladderMaterial);
+    rung.position.set(-2.35, 3.1 + i * 1.28, -2.42);
+    rung.rotation.y = -0.18;
+    rung.castShadow = true;
+    group.add(rung);
+  }
+
+  const ladderLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 6.8, 0.08), ladderMaterial);
+  ladderLeft.position.set(-2.82, 5.6, -2.38);
+  ladderLeft.rotation.y = -0.18;
+  const ladderRight = ladderLeft.clone();
+  ladderRight.position.x = -1.88;
+  group.add(ladderLeft, ladderRight);
+
+  const chute = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5.6, 7), bandMaterial);
+  chute.position.set(3.06, 2.8, 0.7);
+  chute.rotation.z = -0.38;
+  chute.castShadow = true;
+
+  group.add(shadow, body, roof, cap, chute);
+  group.rotation.y = -0.38;
   group.position.set(x, terrainHeight(x, z) + 0.02, z);
   addLevelObject(group);
 }
