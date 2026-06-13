@@ -1,4 +1,9 @@
 import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import "./styles.css";
 
 const atmoUrl = new URL("../sounds/atmo.mp3", import.meta.url).href;
@@ -80,13 +85,14 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: "high-performance"
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const maxPixelRatio = 1.65;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.18;
+renderer.toneMappingExposure = 1.12;
 
 const camera = new THREE.PerspectiveCamera(
   58,
@@ -95,6 +101,32 @@ const camera = new THREE.PerspectiveCamera(
   430
 );
 camera.position.set(0, 18, 34);
+
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
+composer.setSize(window.innerWidth, window.innerHeight);
+const renderPass = new RenderPass(scene, camera);
+const gtaoPass = new GTAOPass(
+  scene,
+  camera,
+  Math.floor(window.innerWidth * 0.62),
+  Math.floor(window.innerHeight * 0.62),
+  undefined,
+  { radius: 0.32, distanceExponent: 1.7, thickness: 0.72, distanceFallOff: 0.78, scale: 0.72, samples: 8 }
+);
+gtaoPass.blendIntensity = 0.46;
+gtaoPass.pdSamples = 8;
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.28,
+  0.36,
+  0.82
+);
+const outputPass = new OutputPass();
+composer.addPass(renderPass);
+composer.addPass(gtaoPass);
+composer.addPass(bloomPass);
+composer.addPass(outputPass);
 
 const clock = new THREE.Clock();
 const tempObject = new THREE.Object3D();
@@ -252,6 +284,62 @@ const waveConfigs = [
   { number: 3, cowGoal: 20, bonus: 1000, timeLimit: 135 }
 ];
 const maxWaveCows = Math.max(...waveConfigs.map((wave) => wave.cowGoal));
+const visualPresets = {
+  farm: {
+    background: 0x02091b,
+    fog: 0x071a30,
+    fogDensity: 0.014,
+    exposure: 1.14,
+    moonColor: 0xa9d4ff,
+    moonIntensity: 3.15,
+    moonPosition: [-44, 76, -54],
+    hemiSky: 0x608ed2,
+    hemiGround: 0x071a11,
+    hemiIntensity: 1.45,
+    bloomStrength: 0.3,
+    bloomRadius: 0.36,
+    bloomThreshold: 0.8,
+    aoIntensity: 0.5,
+    beamColor: 0x55ffe8,
+    beamCore: 0xb8fff8
+  },
+  desert: {
+    background: 0x150817,
+    fog: 0x351928,
+    fogDensity: 0.012,
+    exposure: 1.22,
+    moonColor: 0xbfd8ff,
+    moonIntensity: 2.85,
+    moonPosition: [-36, 70, -38],
+    hemiSky: 0x765f9c,
+    hemiGround: 0x3d1b10,
+    hemiIntensity: 1.32,
+    bloomStrength: 0.26,
+    bloomRadius: 0.34,
+    bloomThreshold: 0.84,
+    aoIntensity: 0.43,
+    beamColor: 0x5dffe9,
+    beamCore: 0xbffff8
+  },
+  ice: {
+    background: 0x031122,
+    fog: 0x092b43,
+    fogDensity: 0.013,
+    exposure: 1.2,
+    moonColor: 0xc9f5ff,
+    moonIntensity: 3.05,
+    moonPosition: [-38, 78, 42],
+    hemiSky: 0x9fd9ff,
+    hemiGround: 0x061522,
+    hemiIntensity: 1.52,
+    bloomStrength: 0.32,
+    bloomRadius: 0.4,
+    bloomThreshold: 0.82,
+    aoIntensity: 0.4,
+    beamColor: 0x62fff4,
+    beamCore: 0xd4fffb
+  }
+};
 const levelObjects = [];
 const levelConfigs = {
   farm: {
@@ -398,6 +486,8 @@ let waveTransitionTimers = [];
 let soundMuted = false;
 let effectsVolume = 1;
 let musicVolume = 0.75;
+let moonLight = null;
+let hemisphereLight = null;
 let musicEnabled = true;
 let difficulty = readStoredDifficulty();
 let audio = null;
@@ -748,15 +838,36 @@ function applyLevel(levelId) {
   cowSpawnZones = level.animalSpots;
   bonusSpawnZones = level.bonusSpots;
   document.body.dataset.previewLevel = level.previewClass;
-  scene.background = new THREE.Color(level.id === "desert" ? 0x120b14 : level.id === "ice" ? 0x04101d : 0x030713);
-  scene.fog = new THREE.FogExp2(
-    level.id === "desert" ? 0x2a1723 : level.id === "ice" ? 0x0b2535 : 0x061226,
-    level.id === "desert" ? 0.010 : level.id === "ice" ? 0.011 : 0.012
-  );
-  renderer.toneMappingExposure = level.id === "desert" ? 1.28 : level.id === "ice" ? 1.34 : 1.18;
+  applyVisualPreset(level.id);
   rebuildLevel();
   updateStartScreenText();
   updateHud(true, clock.elapsedTime);
+}
+
+function applyVisualPreset(levelId) {
+  const preset = visualPresets[levelId] || visualPresets.farm;
+  scene.background = new THREE.Color(preset.background);
+  scene.fog = new THREE.FogExp2(preset.fog, preset.fogDensity);
+  renderer.toneMappingExposure = preset.exposure;
+  if (moonLight) {
+    moonLight.color.setHex(preset.moonColor);
+    moonLight.intensity = preset.moonIntensity;
+    moonLight.position.set(...preset.moonPosition);
+  }
+  if (hemisphereLight) {
+    hemisphereLight.color.setHex(preset.hemiSky);
+    hemisphereLight.groundColor.setHex(preset.hemiGround);
+    hemisphereLight.intensity = preset.hemiIntensity;
+  }
+  if (bloomPass) {
+    bloomPass.strength = preset.bloomStrength;
+    bloomPass.radius = preset.bloomRadius;
+    bloomPass.threshold = preset.bloomThreshold;
+  }
+  if (gtaoPass) {
+    gtaoPass.blendIntensity = preset.aoIntensity;
+  }
+  updateBeamPalette(preset);
 }
 
 function rebuildLevel() {
@@ -1137,33 +1248,33 @@ function createTerrain() {
       Math.sin((x - z) * 0.61) * 0.008;
     if (activeLevelId === "desert") {
       const dune = desertDuneAmount(x, z);
-      const sandLight = THREE.MathUtils.clamp(0.5 + height * 0.007 + dune * 0.13 + detail * 0.68, 0.38, 0.74);
-      color.setHSL(0.125 + Math.sin(x * 0.025) * 0.01, 0.84, sandLight);
-      if (path > 0.2) color.setHSL(0.11, 0.72, 0.44 + path * 0.06 + detail * 0.18);
-      if (ridge > 0.42) color.setHSL(0.1, 0.68, 0.46 + ridge * 0.085 + detail * 0.18);
-      if (height > 5.4) color.setHSL(0.095, 0.6, 0.5 + height * 0.006);
+      const sandLight = THREE.MathUtils.clamp(0.47 + height * 0.007 + dune * 0.13 + detail * 0.62, 0.34, 0.69);
+      color.setHSL(0.115 + Math.sin(x * 0.025) * 0.01, 0.88, sandLight);
+      if (path > 0.2) color.setHSL(0.095, 0.78, 0.4 + path * 0.06 + detail * 0.16);
+      if (ridge > 0.42) color.setHSL(0.085, 0.74, 0.43 + ridge * 0.08 + detail * 0.16);
+      if (height > 5.4) color.setHSL(0.09, 0.66, 0.47 + height * 0.006);
     } else if (activeLevelId === "ice") {
       const frost = iceFrostAmount(x, z);
-      const snowLight = THREE.MathUtils.clamp(0.56 + height * 0.009 + frost * 0.1 + detail * 0.42, 0.45, 0.82);
-      color.setHSL(0.56 + Math.sin(x * 0.02) * 0.012, 0.48, snowLight);
-      if (path > 0.18) color.setHSL(0.54, 0.42, 0.5 + path * 0.08 + detail * 0.16);
-      if (shore > 0.08) color.setHSL(0.52, 0.56, 0.56 + shore * 0.12);
-      if (ridge > 0.42) color.setHSL(0.58, 0.34, 0.62 + ridge * 0.1 + detail * 0.14);
-      if (water) color.setHSL(0.53, 0.7, 0.58 + Math.max(0, shore) * 0.08);
+      const snowLight = THREE.MathUtils.clamp(0.52 + height * 0.008 + frost * 0.09 + detail * 0.34, 0.4, 0.74);
+      color.setHSL(0.56 + Math.sin(x * 0.02) * 0.012, 0.54, snowLight);
+      if (path > 0.18) color.setHSL(0.54, 0.48, 0.46 + path * 0.075 + detail * 0.13);
+      if (shore > 0.08) color.setHSL(0.52, 0.62, 0.5 + shore * 0.11);
+      if (ridge > 0.42) color.setHSL(0.58, 0.4, 0.55 + ridge * 0.09 + detail * 0.12);
+      if (water) color.setHSL(0.53, 0.76, 0.5 + Math.max(0, shore) * 0.07);
     } else {
       const meadow =
-        0.19 +
+        0.18 +
         height * 0.01 +
-        dryLand * 0.025 +
+        dryLand * 0.03 +
         detail;
 
-      color.setHSL(0.25 + Math.sin(x * 0.04) * 0.02, 0.52, meadow);
-      if (pasture > 0.25) color.setHSL(0.29, 0.5, 0.21 + pasture * 0.055 + detail * 0.35);
-      if (path > 0.24) color.setHSL(0.1, 0.34, 0.2 + path * 0.055 + detail * 0.2);
-      if (shore > 0.08) color.setHSL(0.13, 0.28, 0.17 + shore * 0.075);
-      if (ridge > 0.42) color.setHSL(0.16, 0.34, 0.19 + ridge * 0.09 + detail * 0.2);
-      if (height > 5.4) color.setHSL(0.12, 0.3, 0.32 + height * 0.006);
-      if (water) color.setHSL(0.53, 0.54, 0.14 + Math.max(0, shore) * 0.02);
+      color.setHSL(0.26 + Math.sin(x * 0.04) * 0.02, 0.62, meadow);
+      if (pasture > 0.25) color.setHSL(0.3, 0.58, 0.2 + pasture * 0.06 + detail * 0.32);
+      if (path > 0.24) color.setHSL(0.095, 0.42, 0.19 + path * 0.055 + detail * 0.18);
+      if (shore > 0.08) color.setHSL(0.14, 0.36, 0.16 + shore * 0.07);
+      if (ridge > 0.42) color.setHSL(0.17, 0.42, 0.18 + ridge * 0.085 + detail * 0.18);
+      if (height > 5.4) color.setHSL(0.13, 0.38, 0.29 + height * 0.006);
+      if (water) color.setHSL(0.54, 0.68, 0.13 + Math.max(0, shore) * 0.025);
     }
     colors.push(color.r, color.g, color.b);
   }
@@ -1453,19 +1564,22 @@ function addNightSky() {
 }
 
 function addLights() {
-  const moonLight = new THREE.DirectionalLight(0x9fcaff, 2.55);
+  moonLight = new THREE.DirectionalLight(0x9fcaff, 2.55);
   moonLight.position.set(-42, 72, -48);
   moonLight.castShadow = true;
   moonLight.shadow.mapSize.set(2048, 2048);
   moonLight.shadow.camera.near = 1;
   moonLight.shadow.camera.far = 180;
-  moonLight.shadow.camera.left = -98;
-  moonLight.shadow.camera.right = 98;
-  moonLight.shadow.camera.top = 98;
-  moonLight.shadow.camera.bottom = -98;
+  moonLight.shadow.camera.left = -88;
+  moonLight.shadow.camera.right = 88;
+  moonLight.shadow.camera.top = 88;
+  moonLight.shadow.camera.bottom = -88;
+  moonLight.shadow.bias = -0.00018;
+  moonLight.shadow.normalBias = 0.036;
   scene.add(moonLight);
 
-  scene.add(new THREE.HemisphereLight(0x567fb6, 0x102414, 1.8));
+  hemisphereLight = new THREE.HemisphereLight(0x567fb6, 0x102414, 1.8);
+  scene.add(hemisphereLight);
 }
 
 function addLandscapeDetails() {
@@ -1535,20 +1649,18 @@ function addDesertGroundDetails() {
 }
 
 function addDesertLighting() {
-  const warmFill = new THREE.HemisphereLight(0xffc886, 0x3b1c12, 1.45);
-  const lowSun = new THREE.DirectionalLight(0xffb56f, 1.25);
+  const warmFill = new THREE.HemisphereLight(0xffc886, 0x3b1c12, 0.48);
+  const lowSun = new THREE.DirectionalLight(0xffb56f, 0.42);
   lowSun.position.set(54, 42, 26);
-  lowSun.castShadow = true;
-  lowSun.shadow.mapSize.set(1024, 1024);
+  lowSun.castShadow = false;
   addLevelObject(warmFill, lowSun);
 }
 
 function addIceLighting() {
-  const blueFill = new THREE.HemisphereLight(0xb8eaff, 0x0a1724, 1.75);
-  const auroraMoon = new THREE.DirectionalLight(0xc8f7ff, 1.55);
+  const blueFill = new THREE.HemisphereLight(0xb8eaff, 0x0a1724, 0.44);
+  const auroraMoon = new THREE.DirectionalLight(0xc8f7ff, 0.38);
   auroraMoon.position.set(-34, 66, 46);
-  auroraMoon.castShadow = true;
-  auroraMoon.shadow.mapSize.set(1024, 1024);
+  auroraMoon.castShadow = false;
   addLevelObject(blueFill, auroraMoon);
 }
 
@@ -2905,7 +3017,12 @@ function addGrainSilo() {
   chute.rotation.z = -0.38;
   chute.castShadow = true;
 
-  group.add(shadow, body, roof, cap, chute);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd37a }));
+  lamp.position.set(-2.1, 2.2, -2.8);
+  const glow = new THREE.PointLight(0xffbd66, 0.65, 9, 1.9);
+  glow.position.copy(lamp.position);
+
+  group.add(shadow, body, roof, cap, chute, lamp, glow);
   group.rotation.y = -0.38;
   group.position.set(x, terrainHeight(x, z) + 0.02, z);
   addLevelObject(group);
@@ -2954,6 +3071,8 @@ function addWindmill() {
   door.position.set(0, 1.95, -3.86);
   const window = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.14), windowMaterial);
   window.position.set(1.28, 7.9, -2.45);
+  const windowGlow = new THREE.PointLight(0xffc46a, 0.72, 10, 1.85);
+  windowGlow.position.copy(window.position);
 
   const rotor = new THREE.Group();
   rotor.position.set(0, 11.65, -2.92);
@@ -2978,7 +3097,7 @@ function addWindmill() {
 
   rotor.userData.rotationSpeed = 0.56;
   windmillRotors.push(rotor);
-  group.add(foundation, tower, lowerBand, upperBand, roof, door, window, rotor);
+  group.add(foundation, tower, lowerBand, upperBand, roof, door, window, windowGlow, rotor);
   group.rotation.y = rotation;
   group.position.set(x, terrainHeight(x, z) + 0.03, z);
   addLevelObject(group);
@@ -3384,9 +3503,11 @@ function createUfo() {
   const saucer = new THREE.Mesh(
     new THREE.SphereGeometry(2.8, 40, 14),
     new THREE.MeshStandardMaterial({
-      color: 0x9eb1bd,
-      roughness: 0.26,
-      metalness: 0.7
+      color: 0xa9bbc7,
+      roughness: 0.22,
+      metalness: 0.76,
+      emissive: 0x071421,
+      emissiveIntensity: 0.08
     })
   );
   saucer.scale.set(1.65, 0.24, 1.65);
@@ -3395,7 +3516,7 @@ function createUfo() {
 
   const rim = new THREE.Mesh(
     new THREE.TorusGeometry(3.55, 0.26, 10, 52),
-    new THREE.MeshStandardMaterial({ color: 0x697884, roughness: 0.3, metalness: 0.78 })
+    new THREE.MeshStandardMaterial({ color: 0x5f7484, roughness: 0.28, metalness: 0.82, emissive: 0x03111a, emissiveIntensity: 0.12 })
   );
   rim.rotation.x = Math.PI / 2;
   rim.castShadow = true;
@@ -3405,7 +3526,7 @@ function createUfo() {
     new THREE.MeshStandardMaterial({
       color: 0x8df6ff,
       emissive: 0x1aa8c8,
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 0.55,
       roughness: 0.08,
       metalness: 0.05,
       transparent: true,
@@ -3416,9 +3537,9 @@ function createUfo() {
   dome.castShadow = true;
 
   const lampMaterial = new THREE.MeshStandardMaterial({
-    color: 0xfff8a9,
-    emissive: 0xffea7a,
-    emissiveIntensity: 1.7
+    color: 0xa9fff5,
+    emissive: 0x35ffe5,
+    emissiveIntensity: 2.35
   });
   for (let i = 0; i < 12; i += 1) {
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), lampMaterial);
@@ -3476,7 +3597,7 @@ function createUfo() {
   alien.add(alienHead, alienBody);
   alien.position.set(0, 0.18, -0.12);
 
-  const engineGlow = new THREE.PointLight(0x8ffff1, 6, 24);
+  const engineGlow = new THREE.PointLight(0x72fff0, 7.5, 28);
   engineGlow.position.y = -0.35;
 
   const boostGlow = new THREE.Mesh(
@@ -3512,37 +3633,61 @@ function createUfo() {
 function createBeam() {
   const group = new THREE.Group();
   group.visible = false;
+  const outerMaterial = new THREE.MeshBasicMaterial({
+    color: 0x55ffe8,
+    transparent: true,
+    opacity: 0.3,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending
+  });
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: 0xb8fff8,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending
+  });
+  const groundGlowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x46ffe2,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
 
   const cone = new THREE.Mesh(
     new THREE.ConeGeometry(3.4, 12.4, 42, 1, true),
-    new THREE.MeshBasicMaterial({
-      color: 0xfff7a2,
-      transparent: true,
-      opacity: 0.32,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    })
+    outerMaterial
   );
   cone.position.y = -6.2;
   cone.rotation.x = Math.PI;
 
   const core = new THREE.Mesh(
     new THREE.CylinderGeometry(0.54, 1.9, 11.1, 34, 1, true),
-    new THREE.MeshBasicMaterial({
-      color: 0xdffff3,
-      transparent: true,
-      opacity: 0.25,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    })
+    coreMaterial
   );
   core.position.y = -5.55;
 
-  const light = new THREE.SpotLight(0xfff3a4, 8, 27, 0.43, 0.65, 0.8);
+  const groundGlow = new THREE.Mesh(new THREE.CircleGeometry(3.2, 42), groundGlowMaterial);
+  groundGlow.rotation.x = -Math.PI / 2;
+  groundGlow.position.y = -12.25;
+
+  const light = new THREE.SpotLight(0x55ffe8, 11, 29, 0.46, 0.7, 0.78);
   light.position.y = -0.6;
   light.target.position.y = -10;
-  group.add(light.target, light, cone, core);
+  group.add(light.target, light, cone, core, groundGlow);
+  group.userData = { outerMaterial, coreMaterial, groundGlowMaterial, light };
   return group;
+}
+
+function updateBeamPalette(preset) {
+  if (!beam || !beam.userData.outerMaterial) return;
+  beam.userData.outerMaterial.color.setHex(preset.beamColor);
+  beam.userData.coreMaterial.color.setHex(preset.beamCore);
+  beam.userData.groundGlowMaterial.color.setHex(preset.beamColor);
+  beam.userData.light.color.setHex(preset.beamColor);
 }
 
 function createCowHint() {
@@ -4382,7 +4527,7 @@ function tick() {
   updateHud(false, elapsed);
   drawMinimap(elapsed);
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 function updateUfo(delta, elapsed) {
@@ -4531,7 +4676,12 @@ function updateBeam(delta, elapsed) {
 
   beamEnergy = Math.max(0, beamEnergy - delta * (abductingTarget ? 14 : 10));
   if (beamEnergy < 70) tutorialManager.event("energyLow");
-  beam.scale.setScalar(0.94 + Math.sin(elapsed * 12) * 0.035);
+  const beamPulse = 0.94 + Math.sin(elapsed * 12) * 0.035;
+  beam.scale.setScalar(beamPulse);
+  beam.userData.outerMaterial.opacity = 0.28 + Math.sin(elapsed * 8.5) * 0.045;
+  beam.userData.coreMaterial.opacity = abductingTarget ? 0.34 : 0.22;
+  beam.userData.groundGlowMaterial.opacity = 0.14 + Math.sin(elapsed * 7) * 0.035;
+  beam.userData.light.intensity = abductingTarget ? 15 : 10.5;
   const target =
     abductingTarget && !abductingTarget.userData.collected
       ? abductingTarget
@@ -5688,5 +5838,11 @@ function lerpAngle(current, target, amount) {
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  const pixelRatio = Math.min(window.devicePixelRatio, maxPixelRatio);
+  renderer.setPixelRatio(pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setPixelRatio(pixelRatio);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  gtaoPass.setSize(Math.floor(window.innerWidth * 0.62), Math.floor(window.innerHeight * 0.62));
+  bloomPass.setSize(window.innerWidth, window.innerHeight);
 }
