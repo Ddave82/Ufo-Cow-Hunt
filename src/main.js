@@ -128,6 +128,14 @@ const iceWaterBodies = [
   { x: 54, z: -48, rx: 10, rz: 6 }
 ];
 const iceOutpost = { x: -58, z: 48, rx: 10, rz: 8 };
+const iceLandmarks = {
+  mainIceberg: { x: -54, z: -10, rx: 17, rz: 22 },
+  secondaryIceberg: { x: 57, z: 46, rx: 12, rz: 11 },
+  arch: { x: 12, z: -56, rx: 11, rz: 8 },
+  crystalField: { x: -18, z: 61, rx: 10, rz: 7 },
+  brokenWall: { x: 46, z: -8, rx: 13, rz: 6 },
+  iceSpire: { x: -4, z: 68, rx: 6, rz: 6 }
+};
 const farmWaterBodies = [
   { x: -39, z: -35, rx: 22, rz: 10.5 },
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
@@ -143,6 +151,12 @@ const desertSpawnBlockers = [
 ];
 const iceSpawnBlockers = [
   iceOutpost,
+  iceLandmarks.mainIceberg,
+  iceLandmarks.secondaryIceberg,
+  iceLandmarks.arch,
+  iceLandmarks.crystalField,
+  iceLandmarks.brokenWall,
+  iceLandmarks.iceSpire,
   ...iceWaterBodies.map((body) => ({ x: body.x, z: body.z, rx: body.rx + 4, rz: body.rz + 4 }))
 ];
 const farmAnimalSpawnZones = [
@@ -1652,6 +1666,10 @@ function addIceBoundaryBlocks() {
 function addIceDetails() {
   addIceOutpost();
   addIcebergs();
+  addIceArch();
+  addIceCrystalField();
+  addBrokenIceWall();
+  addIsolatedIceSpire();
   addSnowPines();
   addIceCrystals();
 }
@@ -1835,31 +1853,284 @@ function createPolarBear(index) {
 }
 
 function addIcebergs() {
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xb8efff,
-    emissive: 0x123d55,
-    emissiveIntensity: 0.14,
-    roughness: 0.48,
-    metalness: 0.03
+  addIcebergFormation({
+    ...iceLandmarks.mainIceberg,
+    scale: 1,
+    rotation: -0.38,
+    seed: 910,
+    peaks: [
+      [0, 0, 5.6, 17.8, 4.2, 0.1, 0.0],
+      [-4.2, 1.6, 3.8, 10.8, 3.1, -0.3, -0.1],
+      [4.7, -1.8, 3.3, 12.4, 3.2, 0.42, 0.07],
+      [-1.8, -4.5, 2.7, 8.4, 2.6, 0.76, 0.04],
+      [5.5, 3.9, 2.1, 6.0, 2.0, -0.72, -0.08]
+    ],
+    floeCount: 20,
+    floeRadius: 22
+  });
+
+  addIcebergFormation({
+    ...iceLandmarks.secondaryIceberg,
+    scale: 0.68,
+    rotation: 0.76,
+    seed: 960,
+    peaks: [
+      [0.4, 0, 4.5, 12.2, 3.1, 0.0, 0.0],
+      [-3.3, -1.7, 2.6, 7.5, 2.25, 0.54, 0.06],
+      [3.4, 2.0, 2.2, 6.4, 1.95, -0.44, -0.08],
+      [0.2, 4.0, 1.7, 4.6, 1.7, 0.94, 0.05]
+    ],
+    floeCount: 11,
+    floeRadius: 15
   });
 
   [
-    [-46, -18, 2.8],
-    [42, 50, 2.2],
-    [60, -50, 1.8],
-    [-70, 6, 1.6],
-    [4, 66, 2.1],
-    [32, -64, 1.7]
-  ].forEach(([x, z, scale], index) => {
-    const spot = findDryObjectSpot(x, z, 5.5, 860 + index);
-    const berg = new THREE.Mesh(new THREE.ConeGeometry(1.25, 3.4, 5), material);
-    berg.position.set(spot.x, terrainHeight(spot.x, spot.z) + 1.7 * scale, spot.z);
-    berg.scale.set(scale * 0.9, scale, scale * 0.72);
-    berg.rotation.set(index * 0.11, Math.PI / 5 + index * 0.6, index * 0.04);
-    berg.castShadow = true;
-    berg.receiveShadow = true;
-    addLevelObject(berg);
+    [28, -66, 1.5, 0.2],
+    [-72, 27, 1.25, -0.55],
+    [72, -20, 1.15, 0.62]
+  ].forEach(([x, z, scale, rotation], index) => {
+    addSmallIceShard(x, z, scale, rotation, 990 + index);
   });
+}
+
+function createIceLandmarkMaterials() {
+  return {
+    highlight: new THREE.MeshStandardMaterial({
+      color: 0xf1feff,
+      emissive: 0x15394b,
+      emissiveIntensity: 0.1,
+      roughness: 0.58,
+      flatShading: true
+    }),
+    ice: new THREE.MeshStandardMaterial({
+      color: 0xb9efff,
+      emissive: 0x13455d,
+      emissiveIntensity: 0.17,
+      roughness: 0.52,
+      metalness: 0.02,
+      flatShading: true
+    }),
+    shadow: new THREE.MeshStandardMaterial({
+      color: 0x6da6c2,
+      emissive: 0x092839,
+      emissiveIntensity: 0.16,
+      roughness: 0.68,
+      flatShading: true
+    }),
+    deep: new THREE.MeshStandardMaterial({
+      color: 0x326882,
+      emissive: 0x071d2b,
+      emissiveIntensity: 0.18,
+      roughness: 0.72,
+      flatShading: true
+    }),
+    floeTop: new THREE.MeshStandardMaterial({
+      color: 0xe8fbff,
+      emissive: 0x1b5268,
+      emissiveIntensity: 0.08,
+      roughness: 0.62,
+      flatShading: true
+    }),
+    floeEdge: new THREE.MeshStandardMaterial({
+      color: 0x7bcde6,
+      emissive: 0x0f3a50,
+      emissiveIntensity: 0.1,
+      roughness: 0.7,
+      flatShading: true
+    })
+  };
+}
+
+function addIcebergFormation(config) {
+  const materials = createIceLandmarkMaterials();
+  const group = new THREE.Group();
+  const baseGeometry = new THREE.DodecahedronGeometry(1, 0);
+  const peakGeometry = new THREE.ConeGeometry(1, 1, 5);
+
+  const base = new THREE.Mesh(baseGeometry, materials.deep);
+  base.position.set(0, 1.05 * config.scale, 0);
+  base.scale.set(8.5 * config.scale, 2.05 * config.scale, 7.2 * config.scale);
+  base.rotation.set(0.2, config.rotation * 0.4, -0.08);
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
+
+  config.peaks.forEach(([x, z, radius, height, depth, yaw, tilt], index) => {
+    const material = index === 0 ? materials.highlight : index % 2 === 0 ? materials.ice : materials.shadow;
+    const peak = new THREE.Mesh(peakGeometry, material);
+    peak.position.set(x * config.scale, (height * config.scale) / 2 + 0.65 * config.scale, z * config.scale);
+    peak.scale.set(radius * config.scale, height * config.scale, depth * config.scale);
+    peak.rotation.set(tilt, yaw, tilt * -0.7);
+    peak.castShadow = true;
+    peak.receiveShadow = true;
+    group.add(peak);
+  });
+
+  for (let i = 0; i < 6; i += 1) {
+    const angle = config.seed * 0.03 + i * 1.13;
+    const shard = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1, 5), i % 2 === 0 ? materials.ice : materials.shadow);
+    const radius = (6 + (i % 3) * 1.7) * config.scale;
+    const height = (2.8 + (i % 4) * 0.85) * config.scale;
+    shard.position.set(Math.cos(angle) * radius, height / 2 + 0.2, Math.sin(angle) * radius);
+    shard.scale.set(1.2 * config.scale, height, 0.9 * config.scale);
+    shard.rotation.set(0.08, angle + Math.PI * 0.5, -0.08);
+    shard.castShadow = true;
+    shard.receiveShadow = true;
+    group.add(shard);
+  }
+
+  const y = terrainHeight(config.x, config.z);
+  group.position.set(config.x, y + 0.08, config.z);
+  group.rotation.y = config.rotation;
+  addLevelObject(group);
+  addIceFloesAround(config, materials);
+}
+
+function addIceFloesAround(config, materials) {
+  const group = new THREE.Group();
+  const topGeometry = new THREE.CircleGeometry(1, 7);
+  const edgeGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 7);
+
+  for (let i = 0; i < config.floeCount; i += 1) {
+    const angle = config.seed * 0.017 + i * 1.618;
+    const ring = config.floeRadius * (0.55 + ((i * 19) % 41) / 100);
+    const x = config.x + Math.cos(angle) * ring;
+    const z = config.z + Math.sin(angle) * ring * (0.68 + (i % 4) * 0.08);
+    if (Math.abs(x) > halfWorld - 8 || Math.abs(z) > halfWorld - 8) continue;
+    if (!isDryObjectSpot(x, z, 2.4) && !isWater(x, z, 3)) continue;
+
+    const y = terrainHeight(x, z) + 0.18;
+    const sx = 1.8 + (i % 5) * 0.62;
+    const sz = 0.85 + (i % 4) * 0.34;
+
+    const edge = new THREE.Mesh(edgeGeometry, materials.floeEdge);
+    edge.position.set(x, y - 0.08, z);
+    edge.scale.set(sx, 1, sz);
+    edge.rotation.y = angle + i * 0.22;
+    edge.castShadow = true;
+    edge.receiveShadow = true;
+
+    const top = new THREE.Mesh(topGeometry, materials.floeTop);
+    top.rotation.x = -Math.PI / 2;
+    top.rotation.z = angle + i * 0.31;
+    top.position.set(x, y + 0.04, z);
+    top.scale.set(sx, sz, 1);
+    top.receiveShadow = true;
+    group.add(edge, top);
+  }
+
+  addLevelObject(group);
+}
+
+function addSmallIceShard(x, z, scale, rotation, seed) {
+  const materials = createIceLandmarkMaterials();
+  const spot = findDryObjectSpot(x, z, 4, seed);
+  const group = new THREE.Group();
+  for (let i = 0; i < 3; i += 1) {
+    const shard = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1, 5), i === 0 ? materials.highlight : materials.ice);
+    const height = (3.2 - i * 0.55) * scale;
+    shard.position.set((i - 1) * 0.85 * scale, height / 2, Math.sin(i) * 0.7 * scale);
+    shard.scale.set(1.05 * scale, height, 0.78 * scale);
+    shard.rotation.set(0.08, rotation + i * 0.55, -0.08);
+    shard.castShadow = true;
+    shard.receiveShadow = true;
+    group.add(shard);
+  }
+  group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.1, spot.z);
+  group.rotation.y = rotation;
+  addLevelObject(group);
+}
+
+function addIceArch() {
+  const materials = createIceLandmarkMaterials();
+  const spot = findDryObjectSpot(iceLandmarks.arch.x, iceLandmarks.arch.z, 7, 1040);
+  const group = new THREE.Group();
+  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+  [
+    [-2.6, 1.25, 0, 1.1, 2.5, 1.35, -0.18],
+    [2.55, 1.45, 0.15, 1.15, 2.9, 1.25, 0.2],
+    [0, 3.05, 0.1, 4.7, 0.9, 1.15, 0.04],
+    [-0.8, 3.68, -0.1, 2.2, 0.65, 1.0, -0.2],
+    [1.28, 3.58, 0.18, 1.7, 0.58, 0.85, 0.36]
+  ].forEach(([x, y, z, sx, sy, sz, rz], index) => {
+    const block = new THREE.Mesh(blockGeometry, index % 2 === 0 ? materials.ice : materials.highlight);
+    block.position.set(x, y, z);
+    block.scale.set(sx, sy, sz);
+    block.rotation.set(0.05 * index, 0.18 * index, rz);
+    block.castShadow = true;
+    block.receiveShadow = true;
+    group.add(block);
+  });
+  group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.05, spot.z);
+  group.rotation.y = 0.72;
+  addLevelObject(group);
+}
+
+function addIceCrystalField() {
+  const crystalMaterial = new THREE.MeshStandardMaterial({
+    color: 0xa4f6ff,
+    emissive: 0x2cd8f0,
+    emissiveIntensity: 0.22,
+    roughness: 0.36,
+    flatShading: true
+  });
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x8ff7ff,
+    transparent: true,
+    opacity: 0.12,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const group = new THREE.Group();
+  for (let i = 0; i < 13; i += 1) {
+    const angle = i * 1.94;
+    const radius = i === 0 ? 0 : 2.5 + (i % 5) * 1.2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius * 0.62;
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.42 + (i % 3) * 0.16, 0), crystalMaterial);
+    crystal.position.set(x, 0.72 + (i % 4) * 0.12, z);
+    crystal.scale.set(0.7, 1.6 + (i % 4) * 0.28, 0.7);
+    crystal.rotation.set(i * 0.2, angle, i * 0.11);
+    crystal.castShadow = true;
+    group.add(crystal);
+  }
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(8.2, 24), glowMaterial);
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = 0.06;
+  group.add(glow);
+  group.position.set(
+    iceLandmarks.crystalField.x,
+    terrainHeight(iceLandmarks.crystalField.x, iceLandmarks.crystalField.z) + 0.08,
+    iceLandmarks.crystalField.z
+  );
+  group.rotation.y = -0.35;
+  addLevelObject(group);
+}
+
+function addBrokenIceWall() {
+  const materials = createIceLandmarkMaterials();
+  const spot = findDryObjectSpot(iceLandmarks.brokenWall.x, iceLandmarks.brokenWall.z, 7, 1080);
+  const group = new THREE.Group();
+  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+  for (let i = 0; i < 11; i += 1) {
+    if (i === 5) continue;
+    const x = (i - 5) * 1.45;
+    const height = 0.8 + (i % 4) * 0.42;
+    const block = new THREE.Mesh(blockGeometry, i % 3 === 0 ? materials.shadow : materials.ice);
+    block.position.set(x, height / 2, Math.sin(i * 1.7) * 0.55);
+    block.scale.set(1.12, height, 0.78 + (i % 2) * 0.3);
+    block.rotation.set(0.08 * Math.sin(i), i * 0.18, 0.12 * Math.cos(i));
+    block.castShadow = true;
+    block.receiveShadow = true;
+    group.add(block);
+  }
+  group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.05, spot.z);
+  group.rotation.y = -0.48;
+  addLevelObject(group);
+}
+
+function addIsolatedIceSpire() {
+  addSmallIceShard(iceLandmarks.iceSpire.x, iceLandmarks.iceSpire.z, 1.05, 0.28, 1110);
 }
 
 function addSnowPines() {
