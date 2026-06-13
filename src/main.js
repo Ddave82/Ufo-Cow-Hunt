@@ -995,8 +995,8 @@ function createTutorialManager() {
 
     if (name === "movementInput" && beamWasUsed && steps.beam && !steps.boost && !boostScheduled) {
       moveAfterBeamTime += payload.delta || 0;
-      if (moveAfterBeamTime > 0.85) {
-        queueBoostHint();
+      if (moveAfterBeamTime > 2.2) {
+        queueBoostHint(1200);
       }
     }
 
@@ -1036,7 +1036,7 @@ function createTutorialManager() {
       !steps.boost &&
       !boostScheduled &&
       beamWasUsed &&
-      clock.elapsedTime - missionActiveSince > 24
+      clock.elapsedTime - missionActiveSince > 34
     ) {
       queueBoostHint(0);
     }
