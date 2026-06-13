@@ -131,6 +131,7 @@ const iceOutpost = { x: -58, z: 48, rx: 10, rz: 8 };
 const iceLandmarks = {
   mainIceberg: { x: -54, z: -10, rx: 17, rz: 22 },
   secondaryIceberg: { x: 57, z: 46, rx: 12, rz: 11 },
+  smallCentralIceberg: { x: 20, z: -34, rx: 7, rz: 7 },
   arch: { x: 12, z: -56, rx: 11, rz: 8 },
   crystalField: { x: -18, z: 61, rx: 10, rz: 7 },
   brokenWall: { x: 46, z: -8, rx: 13, rz: 6 },
@@ -153,6 +154,7 @@ const iceSpawnBlockers = [
   iceOutpost,
   iceLandmarks.mainIceberg,
   iceLandmarks.secondaryIceberg,
+  iceLandmarks.smallCentralIceberg,
   iceLandmarks.arch,
   iceLandmarks.crystalField,
   iceLandmarks.brokenWall,
@@ -337,7 +339,9 @@ const levelConfigs = {
     bonusSpots: iceBonusSpawnZones,
     water: iceWaterBodies,
     blockers: iceSpawnBlockers,
-    colliders: [],
+    colliders: [
+      { x: iceLandmarks.mainIceberg.x, z: iceLandmarks.mainIceberg.z, radius: 16.5, label: "iceberg" }
+    ],
     powerupSpots: [
       [-60, 60],
       [46, 36],
@@ -1887,7 +1891,8 @@ function addIcebergs() {
   [
     [28, -66, 1.5, 0.2],
     [-72, 27, 1.25, -0.55],
-    [72, -20, 1.15, 0.62]
+    [72, -20, 1.15, 0.62],
+    [iceLandmarks.smallCentralIceberg.x, iceLandmarks.smallCentralIceberg.z, 1.28, -0.18]
   ].forEach(([x, z, scale, rotation], index) => {
     addSmallIceShard(x, z, scale, rotation, 990 + index);
   });
