@@ -920,17 +920,19 @@ function createTutorialManager() {
     }, delay);
   }
 
-  function show(step, title, copy, { duration = 5200, completeOnHide = false, force = false } = {}) {
+  function show(step, title, copy, { duration = 5200, completeOnHide = false, force = false, persistent = false } = {}) {
     if (!canShow() || (!force && steps[step]) || activeStep) return false;
     activeStep = step;
     tutorialTitleNode.textContent = title;
     tutorialCopyNode.textContent = copy;
     tutorialHintNode.classList.remove("hidden");
     window.clearTimeout(hintTimer);
-    hintTimer = window.setTimeout(() => {
-      hide();
-      if (completeOnHide) complete(step);
-    }, duration);
+    if (!persistent) {
+      hintTimer = window.setTimeout(() => {
+        hide();
+        if (completeOnHide) complete(step);
+      }, duration);
+    }
     return true;
   }
 
@@ -965,7 +967,7 @@ function createTutorialManager() {
     if (activeStep === step) hide();
 
     if (step === "movement") {
-      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target", { force: true }), 700);
+      schedule(() => show("beam", "TRACTOR BEAM", "Hold SPACE above a target", { force: true, persistent: true }), 700);
     }
   }
 
