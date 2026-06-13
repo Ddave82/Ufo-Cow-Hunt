@@ -136,10 +136,11 @@ Playable prototype with three mission zones, timed waves, scoring, drone pressur
 
 ## Changelog
 
-- Tuned the large Arctic iceberg collision radius so the UFO collides closer to the visible mesh.
-- Added collision to the large Arctic iceberg.
-- Added an additional small iceberg to the Arctic level.
-- Added Arctic landmarks and improved the frozen level atmosphere.
+- Added three playable mission zones: Farm Night, Desert Hunt, and Ice Drift.
+- Added the full three-wave mission structure with timers, bonuses, and final score breakdown.
+- Expanded the game with mission-specific targets: cows, camels, and polar bears.
+- Added richer low-poly environments with landmarks, hazards, energy pickups, and themed scenery.
+- Improved the arcade feel with drone pressure, boost behavior, tutorial hints, settings, and layered audio.
 
 ## Roadmap
 
