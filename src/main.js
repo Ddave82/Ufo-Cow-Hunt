@@ -142,8 +142,14 @@ const farmWaterBodies = [
   { x: 42, z: -57, rx: 12.5, rz: 7.2 }
 ];
 const desertWaterBodies = [];
+const farmLandmarks = {
+  mountain: { x: -58, z: 14, rx: 21, rz: 18 },
+  windmill: { x: 58, z: -24, rx: 10, rz: 10, rotation: -0.52 }
+};
 const farmSpawnBlockers = [
-  { x: 48, z: 48, rx: 14, rz: 12 }
+  { x: 48, z: 48, rx: 14, rz: 12 },
+  farmLandmarks.mountain,
+  farmLandmarks.windmill
 ];
 const desertSpawnBlockers = [
   ...desertTentSites.map((site) => ({ x: site.x, z: site.z, rx: 7.5 * site.scale, rz: 5.5 * site.scale })),
@@ -217,6 +223,7 @@ const keys = new Set();
 const collectibles = [];
 const powerups = [];
 const hazards = [];
+const windmillRotors = [];
 const waterSurfaces = [];
 const waterRipples = [];
 const difficultyConfigs = {
@@ -267,7 +274,12 @@ const levelConfigs = {
     bonusSpots: farmBonusSpawnZones,
     water: farmWaterBodies,
     blockers: farmSpawnBlockers,
-    colliders: [],
+    colliders: [
+      { x: farmLandmarks.mountain.x, z: farmLandmarks.mountain.z, radius: 14.6, label: "mountain" },
+      { x: farmLandmarks.mountain.x + 9, z: farmLandmarks.mountain.z - 5, radius: 8.2, label: "mountain" },
+      { x: farmLandmarks.mountain.x - 5, z: farmLandmarks.mountain.z + 8, radius: 7.8, label: "mountain" },
+      { x: farmLandmarks.windmill.x, z: farmLandmarks.windmill.z, radius: 6.2, label: "windmill" }
+    ],
     powerupSpots: [
       [-62, 60],
       [50, 36],
@@ -754,6 +766,7 @@ function rebuildLevel() {
   collectibles.length = 0;
   powerups.length = 0;
   hazards.length = 0;
+  windmillRotors.length = 0;
   waterSurfaces.length = 0;
   waterRipples.length = 0;
   terrain = createTerrain();
@@ -2813,12 +2826,165 @@ function addFenceRail(group, railGeometry, material, x1, z1, x2, z2, heightOffse
 }
 
 function addFarmDetails() {
+  addFarmMountain();
+  addWindmill();
   addPastureFences();
   addBarn(48, 48, -0.34);
   addFarmLanterns();
   addHayBales();
   addPathStones();
   addGrassClumps();
+}
+
+function addFarmMountain() {
+  const { x, z } = farmLandmarks.mountain;
+  const group = new THREE.Group();
+  const grassMaterial = new THREE.MeshStandardMaterial({
+    color: 0x2f6a38,
+    emissive: 0x061407,
+    roughness: 0.96,
+    flatShading: true
+  });
+  const darkGrassMaterial = new THREE.MeshStandardMaterial({
+    color: 0x214f2f,
+    roughness: 0.98,
+    flatShading: true
+  });
+  const rockMaterial = new THREE.MeshStandardMaterial({
+    color: 0x55594f,
+    roughness: 0.94,
+    flatShading: true
+  });
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x0b1510,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false
+  });
+
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(24, 24), shadowMaterial);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.04;
+  shadow.scale.set(1.15, 0.82, 1);
+
+  const base = new THREE.Mesh(new THREE.ConeGeometry(17, 18, 7), grassMaterial);
+  base.position.y = 9;
+  base.scale.set(1.22, 1, 0.9);
+  base.rotation.y = -0.38;
+  base.castShadow = true;
+  base.receiveShadow = true;
+
+  const rearRidge = new THREE.Mesh(new THREE.ConeGeometry(9, 12, 6), darkGrassMaterial);
+  rearRidge.position.set(-7, 6, 6);
+  rearRidge.scale.set(1.15, 0.92, 0.82);
+  rearRidge.rotation.y = 0.28;
+  rearRidge.castShadow = true;
+  rearRidge.receiveShadow = true;
+
+  const sideRidge = new THREE.Mesh(new THREE.ConeGeometry(8, 11, 6), grassMaterial);
+  sideRidge.position.set(9, 5.5, -5);
+  sideRidge.scale.set(1.05, 0.9, 0.78);
+  sideRidge.rotation.y = -0.95;
+  sideRidge.castShadow = true;
+  sideRidge.receiveShadow = true;
+
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(5.2, 8.2, 6), rockMaterial);
+  cap.position.set(0.8, 18.2, -0.6);
+  cap.scale.set(0.8, 0.92, 0.72);
+  cap.rotation.y = 0.14;
+  cap.castShadow = true;
+
+  [
+    [-3.8, 8.2, -8.7, 4.8, 7.4, 0.45, -0.28],
+    [5.8, 6.4, 5.2, 4.2, 5.8, -0.7, 0.32],
+    [-10.5, 4.8, 0.4, 3.6, 5.2, 1.05, -0.1],
+    [9.8, 4.2, -1.4, 3.3, 4.8, -1.22, 0.18]
+  ].forEach(([px, py, pz, sx, sy, ry, rz], index) => {
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1, 0), rockMaterial);
+    rock.position.set(px, py, pz);
+    rock.scale.set(sx, sy, 0.45);
+    rock.rotation.set(0.18 + index * 0.08, ry, rz);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    group.add(rock);
+  });
+
+  group.add(shadow, base, rearRidge, sideRidge, cap);
+  group.position.set(x, terrainHeight(x, z) + 0.02, z);
+  addLevelObject(group);
+}
+
+function addWindmill() {
+  const { x, z, rotation } = farmLandmarks.windmill;
+  const group = new THREE.Group();
+  const foundationMaterial = new THREE.MeshStandardMaterial({ color: 0x3b2a20, roughness: 0.9 });
+  const plasterMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc6c0aa,
+    emissive: 0x10100c,
+    roughness: 0.82,
+    flatShading: true
+  });
+  const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3125, roughness: 0.86 });
+  const roofMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb69042,
+    emissive: 0x1b1205,
+    roughness: 0.9,
+    flatShading: true
+  });
+  const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x44281d, roughness: 0.82 });
+  const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffcf77 });
+
+  const foundation = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 5.4, 1.05, 8), foundationMaterial);
+  foundation.position.y = 0.55;
+  foundation.castShadow = true;
+  foundation.receiveShadow = true;
+
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.25, 3.85, 12.4, 9), plasterMaterial);
+  tower.position.y = 6.7;
+  tower.castShadow = true;
+  tower.receiveShadow = true;
+
+  const lowerBand = new THREE.Mesh(new THREE.CylinderGeometry(3.95, 4.2, 0.42, 9), beamMaterial);
+  lowerBand.position.y = 1.42;
+  const upperBand = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.7, 0.32, 9), beamMaterial);
+  upperBand.position.y = 10.7;
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.25, 2.45, 8), roofMaterial);
+  roof.position.y = 14.1;
+  roof.castShadow = true;
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.35, 2.25, 0.16), doorMaterial);
+  door.position.set(0, 1.95, -3.86);
+  const window = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.14), windowMaterial);
+  window.position.set(1.28, 7.9, -2.45);
+
+  const rotor = new THREE.Group();
+  rotor.position.set(0, 11.65, -2.92);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.64, 10), beamMaterial);
+  hub.rotation.x = Math.PI / 2;
+  hub.castShadow = true;
+  rotor.add(hub);
+
+  for (let i = 0; i < 4; i += 1) {
+    const blade = new THREE.Group();
+    blade.rotation.z = i * Math.PI * 0.5;
+    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 6.6, 0.18), beamMaterial);
+    spar.position.y = 3.25;
+    spar.castShadow = true;
+    const sail = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.8, 0.1), plasterMaterial);
+    sail.position.set(0.36, 4.45, 0);
+    sail.rotation.z = -0.12;
+    sail.castShadow = true;
+    blade.add(spar, sail);
+    rotor.add(blade);
+  }
+
+  rotor.userData.rotationSpeed = 0.56;
+  windmillRotors.push(rotor);
+  group.add(foundation, tower, lowerBand, upperBand, roof, door, window, rotor);
+  group.rotation.y = rotation;
+  group.position.set(x, terrainHeight(x, z) + 0.03, z);
+  addLevelObject(group);
 }
 
 function addPastureFences() {
@@ -5001,6 +5167,10 @@ function drawMinimap(elapsed) {
 }
 
 function updateLandscape(elapsed) {
+  windmillRotors.forEach((rotor) => {
+    rotor.rotation.z = elapsed * rotor.userData.rotationSpeed;
+  });
+
   waterSurfaces.forEach((water) => {
     water.material.emissiveIntensity = 0.22 + Math.sin(elapsed * 1.4 + water.userData.waveOffset) * 0.04;
   });
