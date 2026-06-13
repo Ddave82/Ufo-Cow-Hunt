@@ -95,6 +95,9 @@ const tempVector2 = new THREE.Vector3();
 const worldSize = 170;
 const halfWorld = worldSize / 2;
 const terrainSegments = 112;
+const ufoCruiseHeight = 10.6;
+const energyCoreHoverHeight = ufoCruiseHeight + 0.25;
+const energyCorePickupRadius = 3.4;
 const desertPyramid = { x: 21, z: -10, radius: 17, plateauRadius: 20, blendRadius: 28, baseHeight: 0.8 };
 const desertOases = [
   { x: -48, z: 20, rx: 7.2, rz: 4.2 },
@@ -3325,7 +3328,7 @@ function spawnPowerups() {
   getActiveLevel().powerupSpots.forEach(([x, z], index) => {
     const safeSpot = findDrySpot(x, z, index + 120);
     const powerup = createEnergyCore();
-    powerup.position.set(safeSpot.x, terrainHeight(safeSpot.x, safeSpot.z) + 1.15, safeSpot.z);
+    powerup.position.set(safeSpot.x, terrainHeight(safeSpot.x, safeSpot.z) + energyCoreHoverHeight, safeSpot.z);
     powerup.userData = { collected: false, baseY: powerup.position.y };
     powerups.push(powerup);
     addLevelObject(powerup);
@@ -3636,7 +3639,7 @@ function updateUfo(delta, elapsed) {
   handleUfoCollisions();
 
   const ground = terrainHeight(ufo.group.position.x, ufo.group.position.z);
-  const desiredY = ground + 10.6 + Math.sin(elapsed * 2.3) * 0.44;
+  const desiredY = ground + ufoCruiseHeight + Math.sin(elapsed * 2.3) * 0.44;
   ufo.group.position.y = THREE.MathUtils.lerp(ufo.group.position.y, desiredY, 0.07);
 
   const speed = ufoState.velocity.length();
@@ -3956,7 +3959,7 @@ function updatePowerups(delta, elapsed, active = true) {
     powerup.rotation.y += delta * 2.1;
     powerup.children[1].rotation.z += delta * 1.9;
 
-    if (active && horizontalDistance(powerup.position, ufo.group.position) < 3.2) {
+    if (active && powerup.position.distanceTo(ufo.group.position) < energyCorePickupRadius) {
       powerup.userData.collected = true;
       powerup.visible = false;
       score += 50;

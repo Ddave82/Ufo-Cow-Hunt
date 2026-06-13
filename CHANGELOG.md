@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Changed energy crystals to float at UFO flight height and collect on contact without the beam.
 - Added Easy, Normal, and Hard difficulty settings for drone count.
 - Reduced drone detection radius slightly.
 - Expanded the mission-complete screen with collected animals versus total available animals.

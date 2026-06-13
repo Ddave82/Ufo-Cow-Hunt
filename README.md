@@ -23,7 +23,7 @@ Each mission is split into three waves in the same selected level:
 - Wave 2: abduct 15 animals in 1:55
 - Wave 3: abduct 20 animals in 2:15
 
-Energy crystals are optional support items. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the next wave starts and only the points collected in time count. After Wave 3 is cleared in time, the UFO blasts into the sky and the takeoff sound plays; if Wave 3 times out, the final score is locked with the points collected so far.
+Energy crystals are optional support items. They float at UFO flight height and are collected by touching them, without using the beam. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the next wave starts and only the points collected in time count. After Wave 3 is cleared in time, the UFO blasts into the sky and the takeoff sound plays; if Wave 3 times out, the final score is locked with the points collected so far.
 
 The mission-complete screen shows the final score, mission time, score breakdown, and how many level animals were collected out of the total available across all three waves.
 
@@ -48,7 +48,7 @@ Drone pressure can be changed in the settings menu:
 - Wave-specific animal behavior: boost scares animals from Wave 2 onward, and targets wander slowly in Wave 3
 - Rotating radar with targets, drones, and world boundary
 - Score system with combo multiplier and final score breakdown
-- Beam energy, boost, and rechargeable energy crystals
+- Beam energy, boost, and touch-collected floating energy crystals
 - Search drones with louder contact alarms, visible red HUD feedback, scan beams, UFO slowdown, and energy-drain behavior
 - Difficulty setting for drone pressure: Easy disables drones, Normal uses 3 drones, and Hard uses 4 drones
 - Level selection, instruction screen, settings menu, and larger mission-complete reward screen
