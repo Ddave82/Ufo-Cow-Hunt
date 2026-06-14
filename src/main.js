@@ -86,10 +86,12 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: "high-performance"
 });
 const maxPixelRatio = 1.45;
-const minPixelRatio = 0.55;
-const maxRenderPixels = 2400000;
-const maxAoPixels = 650000;
-const maxBloomPixels = 1100000;
+const minLargeViewportPixelRatio = 0.72;
+const fullResolutionPixelThreshold = 2600000;
+const largeViewportPixelThreshold = 4200000;
+const maxRenderPixels = 2800000;
+const maxAoPixels = 750000;
+const maxBloomPixels = 1300000;
 let renderQualityScale = 1;
 let renderPressure = 0;
 let renderRecovery = 0;
@@ -6329,7 +6331,13 @@ function getRenderPixelRatio() {
   const nativeRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
   const viewportPixels = Math.max(1, window.innerWidth * window.innerHeight);
   const budgetRatio = Math.sqrt(maxRenderPixels / viewportPixels);
-  const lowerBound = Math.min(nativeRatio, minPixelRatio);
+  const minimumRatio =
+    viewportPixels <= fullResolutionPixelThreshold
+      ? 1
+      : viewportPixels <= largeViewportPixelThreshold
+        ? 0.9
+        : minLargeViewportPixelRatio;
+  const lowerBound = Math.min(nativeRatio, minimumRatio);
   return THREE.MathUtils.clamp(Math.min(nativeRatio, budgetRatio) * renderQualityScale, lowerBound, nativeRatio);
 }
 
@@ -6370,8 +6378,8 @@ function updateRenderPerformance(rawDelta, elapsed) {
   renderPressure = THREE.MathUtils.clamp(renderPressure + (heavyFrame ? 1 : -0.45), 0, 18);
   renderRecovery = THREE.MathUtils.clamp(renderRecovery + (smoothFrame ? 1 : -1.2), 0, 26);
 
-  if (renderPressure >= 5 && renderQualityScale > 0.72) {
-    renderQualityScale = Math.max(0.72, renderQualityScale - 0.08);
+  if (renderPressure >= 5 && renderQualityScale > 0.86) {
+    renderQualityScale = Math.max(0.86, renderQualityScale - 0.06);
     renderPressure = 0;
     renderRecovery = 0;
     lastRenderSizingUpdate = elapsed;
