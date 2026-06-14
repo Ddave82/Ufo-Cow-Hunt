@@ -86,10 +86,14 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: "high-performance"
 });
 const maxPixelRatio = 1.45;
-const minPixelRatio = 0.62;
-const maxRenderPixels = 3000000;
-const maxAoPixels = 900000;
-const maxBloomPixels = 1600000;
+const minPixelRatio = 0.55;
+const maxRenderPixels = 2400000;
+const maxAoPixels = 650000;
+const maxBloomPixels = 1100000;
+let renderQualityScale = 1;
+let renderPressure = 0;
+let renderRecovery = 0;
+let lastRenderSizingUpdate = 0;
 const initialPixelRatio = getRenderPixelRatio();
 renderer.setPixelRatio(initialPixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -4975,8 +4979,10 @@ function createPatrolDrone(index) {
 }
 
 function tick() {
-  const delta = Math.min(clock.getDelta(), 0.033);
+  const rawDelta = clock.getDelta();
+  const delta = Math.min(rawDelta, 0.033);
   const elapsed = clock.elapsedTime;
+  updateRenderPerformance(rawDelta, elapsed);
   const gameplayActive = gameStarted && !gameWon && uiState === UI_STATES.PLAYING && !waveTransitionActive;
 
   if (gameplayActive) {
@@ -6324,12 +6330,12 @@ function getRenderPixelRatio() {
   const viewportPixels = Math.max(1, window.innerWidth * window.innerHeight);
   const budgetRatio = Math.sqrt(maxRenderPixels / viewportPixels);
   const lowerBound = Math.min(nativeRatio, minPixelRatio);
-  return THREE.MathUtils.clamp(Math.min(nativeRatio, budgetRatio), lowerBound, nativeRatio);
+  return THREE.MathUtils.clamp(Math.min(nativeRatio, budgetRatio) * renderQualityScale, lowerBound, nativeRatio);
 }
 
 function getScaledPassSize(scale, maxPixels) {
-  let width = Math.max(1, window.innerWidth * scale);
-  let height = Math.max(1, window.innerHeight * scale);
+  let width = Math.max(1, window.innerWidth * scale * renderQualityScale);
+  let height = Math.max(1, window.innerHeight * scale * renderQualityScale);
   const pixels = width * height;
   if (pixels > maxPixels) {
     const ratio = Math.sqrt(maxPixels / pixels);
@@ -6356,9 +6362,38 @@ function applyRenderSizing() {
   bloomPass.setSize(bloomSize.width, bloomSize.height);
 }
 
+function updateRenderPerformance(rawDelta, elapsed) {
+  if (elapsed - lastRenderSizingUpdate < 0.9) return;
+
+  const heavyFrame = rawDelta > 0.023;
+  const smoothFrame = rawDelta < 0.0175;
+  renderPressure = THREE.MathUtils.clamp(renderPressure + (heavyFrame ? 1 : -0.45), 0, 18);
+  renderRecovery = THREE.MathUtils.clamp(renderRecovery + (smoothFrame ? 1 : -1.2), 0, 26);
+
+  if (renderPressure >= 5 && renderQualityScale > 0.72) {
+    renderQualityScale = Math.max(0.72, renderQualityScale - 0.08);
+    renderPressure = 0;
+    renderRecovery = 0;
+    lastRenderSizingUpdate = elapsed;
+    applyRenderSizing();
+    return;
+  }
+
+  if (renderRecovery >= 12 && renderQualityScale < 1) {
+    renderQualityScale = Math.min(1, renderQualityScale + 0.04);
+    renderPressure = 0;
+    renderRecovery = 0;
+    lastRenderSizingUpdate = elapsed;
+    applyRenderSizing();
+  }
+}
+
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  renderQualityScale = 1;
+  renderPressure = 0;
+  renderRecovery = 0;
   applyRenderSizing();
   lastMinimapDraw = -Infinity;
 }
