@@ -6138,7 +6138,7 @@ function fadeOutBeamSound() {
 
   const startVolume = beamAudio.volume;
   const fadeStartedAt = performance.now();
-  const fadeDuration = 55;
+  const fadeDuration = 180;
 
   const step = (now) => {
     const progress = THREE.MathUtils.clamp((now - fadeStartedAt) / fadeDuration, 0, 1);
