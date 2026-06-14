@@ -537,6 +537,7 @@ let musicAudio = null;
 let musicTrackIndex = 0;
 let beamAudio = null;
 let beamPreviewAudio = null;
+let beamFadeFrame = 0;
 let takeoffAudio = null;
 let countdownAudio = null;
 let tutorialManager = null;
@@ -6097,16 +6098,17 @@ function setupBeamSound() {
 }
 
 function updateBeamVolume() {
-  const volume = soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 0.95, 0, 1);
-  if (beamAudio) beamAudio.volume = volume;
+  const volume = getBeamVolume();
+  if (beamAudio && !beamFadeFrame) beamAudio.volume = volume;
   if (beamPreviewAudio) beamPreviewAudio.volume = volume;
 }
 
 function updateBeamSound(active) {
   if (!beamAudio) return;
-  updateBeamVolume();
 
   if (active) {
+    cancelBeamFade();
+    updateBeamVolume();
     if (beamAudio.paused) {
       beamAudio.currentTime = 0;
       beamAudio.play().catch(() => {
@@ -6116,16 +6118,50 @@ function updateBeamSound(active) {
     return;
   }
 
-  if (!beamAudio.paused) {
-    beamAudio.pause();
-    beamAudio.currentTime = 0;
-  }
+  fadeOutBeamSound();
 }
 
 function stopBeamSound() {
   if (!beamAudio) return;
+  cancelBeamFade();
   beamAudio.pause();
   beamAudio.currentTime = 0;
+  beamAudio.volume = getBeamVolume();
+}
+
+function getBeamVolume() {
+  return soundMuted ? 0 : THREE.MathUtils.clamp(effectsVolume * 0.95, 0, 1);
+}
+
+function fadeOutBeamSound() {
+  if (!beamAudio || beamAudio.paused || beamFadeFrame) return;
+
+  const startVolume = beamAudio.volume;
+  const fadeStartedAt = performance.now();
+  const fadeDuration = 55;
+
+  const step = (now) => {
+    const progress = THREE.MathUtils.clamp((now - fadeStartedAt) / fadeDuration, 0, 1);
+    beamAudio.volume = startVolume * (1 - progress);
+
+    if (progress < 1) {
+      beamFadeFrame = requestAnimationFrame(step);
+      return;
+    }
+
+    beamFadeFrame = 0;
+    beamAudio.pause();
+    beamAudio.currentTime = 0;
+    beamAudio.volume = getBeamVolume();
+  };
+
+  beamFadeFrame = requestAnimationFrame(step);
+}
+
+function cancelBeamFade() {
+  if (!beamFadeFrame) return;
+  cancelAnimationFrame(beamFadeFrame);
+  beamFadeFrame = 0;
 }
 
 function setupTakeoffSound() {
