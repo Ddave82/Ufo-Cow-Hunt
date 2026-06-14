@@ -4119,25 +4119,25 @@ function createBeam() {
   });
 
   const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(3.4, 12.4, 42, 1, true),
+    new THREE.ConeGeometry(3.4, 16.2, 42, 1, true),
     outerMaterial
   );
-  cone.position.y = -6.2;
+  cone.position.y = -8.1;
   cone.rotation.x = Math.PI;
 
   const core = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.54, 1.9, 11.1, 34, 1, true),
+    new THREE.CylinderGeometry(0.54, 1.9, 14.8, 34, 1, true),
     coreMaterial
   );
-  core.position.y = -5.55;
+  core.position.y = -7.4;
 
   const groundGlow = new THREE.Mesh(new THREE.CircleGeometry(3.2, 42), groundGlowMaterial);
   groundGlow.rotation.x = -Math.PI / 2;
-  groundGlow.position.y = -12.25;
+  groundGlow.position.y = -15.95;
 
   const light = new THREE.SpotLight(0x55ffe8, 11, 29, 0.46, 0.7, 0.78);
   light.position.y = -0.6;
-  light.target.position.y = -10;
+  light.target.position.y = -14;
   group.add(light.target, light, cone, core, groundGlow);
   group.userData = { outerMaterial, coreMaterial, groundGlowMaterial, light };
   return group;
