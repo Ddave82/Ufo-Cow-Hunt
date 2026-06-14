@@ -187,10 +187,7 @@ const farmPathPoints = [
   [69, 28],
   [76, -8],
   [74, -48],
-  [70, -68],
-  [42, -72],
-  [17, -66],
-  [6, -47]
+  [70, -68]
 ];
 const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 },
@@ -319,7 +316,7 @@ const visualPresets = {
     skyTop: 0x010615,
     skyHorizon: 0x071c33,
     starColor: 0xdcf6ff,
-    starOpacity: 1.16,
+    starOpacity: 0.68,
     moonGlow: 0x6fb8ff,
     moonGlowOpacity: 0.16
   },
@@ -343,7 +340,7 @@ const visualPresets = {
     skyTop: 0x08030d,
     skyHorizon: 0x2c1321,
     starColor: 0xffe6c6,
-    starOpacity: 1.08,
+    starOpacity: 0.62,
     moonGlow: 0xff9f7a,
     moonGlowOpacity: 0.1
   },
@@ -367,7 +364,7 @@ const visualPresets = {
     skyTop: 0x010817,
     skyHorizon: 0x07304a,
     starColor: 0xe8fbff,
-    starOpacity: 1.14,
+    starOpacity: 0.7,
     moonGlow: 0x92eaff,
     moonGlowOpacity: 0.18
   }
@@ -1559,6 +1556,11 @@ function distanceToSegment(px, pz, ax, az, bx, bz) {
   return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
 }
 
+function seededUnit(index, seed) {
+  const value = Math.sin(index * 127.1 + seed * 311.7) * 43758.5453;
+  return value - Math.floor(value);
+}
+
 function addNightSky() {
   skyDome = new THREE.Mesh(
     new THREE.SphereGeometry(245, 36, 18),
@@ -1594,10 +1596,10 @@ function addNightSky() {
   scene.add(skyDome);
 
   const layers = [
-    { count: 260, radius: 210, elevationMin: 0.04, elevationRange: 0.22, size: 1.9, opacity: 0.72, seed: 7 },
-    { count: 340, radius: 218, elevationMin: 0.18, elevationRange: 0.58, size: 1.45, opacity: 0.72, seed: 11 },
-    { count: 150, radius: 224, elevationMin: 0.34, elevationRange: 0.5, size: 1.8, opacity: 0.58, seed: 29 },
-    { count: 42, radius: 232, elevationMin: 0.48, elevationRange: 0.36, size: 2.25, opacity: 0.42, seed: 53 }
+    { count: 170, radius: 210, elevationMin: 0.04, elevationRange: 0.22, size: 1.05, opacity: 0.5, seed: 7 },
+    { count: 230, radius: 218, elevationMin: 0.18, elevationRange: 0.58, size: 0.82, opacity: 0.46, seed: 11 },
+    { count: 84, radius: 224, elevationMin: 0.34, elevationRange: 0.5, size: 1.35, opacity: 0.52, seed: 29 },
+    { count: 18, radius: 232, elevationMin: 0.48, elevationRange: 0.36, size: 1.85, opacity: 0.42, seed: 53 }
   ];
 
   layers.forEach((layer) => {
@@ -1605,11 +1607,16 @@ function addNightSky() {
     const starPositions = [];
 
     for (let i = 0; i < layer.count; i += 1) {
-      const angle = (i * 2.399963 + layer.seed) % (Math.PI * 2);
-      const elevationNoise = ((i * 61 + layer.seed * 13) % 100) / 100;
-      const elevation = layer.elevationMin + elevationNoise * layer.elevationRange;
-      const horizontalRadius = Math.cos(elevation) * layer.radius;
-      const y = Math.sin(elevation) * layer.radius + 18;
+      const angleNoise = seededUnit(i, layer.seed);
+      const spreadNoise = seededUnit(i, layer.seed + 47);
+      const elevationNoise = seededUnit(i, layer.seed + 83);
+      const bandCluster = Math.floor(seededUnit(i, layer.seed + 121) * 9);
+      const clusterAngle = bandCluster * 0.69 + seededUnit(bandCluster, layer.seed + 171) * 0.42;
+      const angle = clusterAngle + (angleNoise - 0.5) * (0.42 + spreadNoise * 1.6);
+      const elevation = layer.elevationMin + Math.pow(elevationNoise, 1.35) * layer.elevationRange;
+      const radius = layer.radius + (seededUnit(i, layer.seed + 211) - 0.5) * 18;
+      const horizontalRadius = Math.cos(elevation) * radius;
+      const y = Math.sin(elevation) * radius + 18;
       starPositions.push(Math.cos(angle) * horizontalRadius, y, Math.sin(angle) * horizontalRadius);
     }
 
@@ -1766,7 +1773,6 @@ function addLandscapeDetails() {
   addFarmDetails();
   addTrees();
   addRocks();
-  addCropCircles();
   addClouds();
 }
 
@@ -2889,14 +2895,6 @@ function addWater() {
     transparent: true,
     opacity: 0.9
   });
-  const rippleMaterial = new THREE.MeshBasicMaterial({
-    color: 0xa7fff2,
-    transparent: true,
-    opacity: 0.14,
-    side: THREE.DoubleSide,
-    depthWrite: false
-  });
-
   waterBodies.forEach((body, index) => {
     const shore = new THREE.Mesh(new THREE.RingGeometry(0.96, 1.22, 72), shoreMaterial);
     shore.rotation.x = -Math.PI / 2;
@@ -2920,25 +2918,6 @@ function addWater() {
     water.userData = { waveOffset: index * 0.8 + body.x * 0.03 };
     waterSurfaces.push(water);
     addLevelObject(water);
-
-    for (let ripple = 0; ripple < 3; ripple += 1) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.18 + ripple * 0.18, 0.2 + ripple * 0.18, 64), rippleMaterial);
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(
-        body.x + Math.cos(index + ripple * 1.7) * body.rx * 0.2,
-        terrainHeight(body.x, body.z) + 0.13 + ripple * 0.006,
-        body.z + Math.sin(index * 0.7 + ripple) * body.rz * 0.2
-      );
-      ring.scale.set(body.rx * 0.8, body.rz * 0.8, 1);
-      ring.name = `water-ripple-${index}-${ripple}`;
-      ring.userData = {
-        baseScaleX: ring.scale.x,
-        baseScaleY: ring.scale.y,
-        rippleOffset: index * 1.3 + ripple * 0.8
-      };
-      waterRipples.push(ring);
-      addLevelObject(ring);
-    }
   });
 }
 
@@ -3857,20 +3836,40 @@ function createUfo() {
   }
 
   const rivetMaterial = new THREE.MeshStandardMaterial({
-    color: 0xc7d0d4,
-    roughness: 0.36,
-    metalness: 0.86
+    color: 0xd7e0e4,
+    roughness: 0.32,
+    metalness: 0.9,
+    emissive: 0x071018,
+    emissiveIntensity: 0.08
   });
-  const rivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.055, 8, 6), rivetMaterial, 40);
-  for (let i = 0; i < 40; i += 1) {
-    const angle = (i / 40) * Math.PI * 2;
+  const rivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.072, 8, 6), rivetMaterial, 56);
+  for (let i = 0; i < 56; i += 1) {
+    const angle = (i / 56) * Math.PI * 2;
     const radius = i % 2 === 0 ? 2.92 : 2.46;
-    tempObject.position.set(Math.cos(angle) * radius, 0.05 + (i % 2) * 0.08, Math.sin(angle) * radius);
-    tempObject.scale.setScalar(i % 2 === 0 ? 1.15 : 0.9);
+    tempObject.position.set(Math.cos(angle) * radius, 0.07 + (i % 2) * 0.09, Math.sin(angle) * radius);
+    tempObject.scale.setScalar(i % 2 === 0 ? 1.08 : 0.82);
     tempObject.updateMatrix();
     rivets.setMatrixAt(i, tempObject.matrix);
   }
   rivets.castShadow = true;
+
+  const panelSeams = new THREE.Group();
+  const seamMaterial = new THREE.MeshStandardMaterial({
+    color: 0x40505d,
+    roughness: 0.38,
+    metalness: 0.84,
+    emissive: 0x02070b,
+    emissiveIntensity: 0.08
+  });
+  for (let i = 0; i < 14; i += 1) {
+    const angle = (i / 14) * Math.PI * 2;
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.024, 0.82), seamMaterial);
+    const radius = 2.08;
+    seam.position.set(Math.cos(angle) * radius, 0.185, Math.sin(angle) * radius);
+    seam.rotation.y = -angle;
+    seam.castShadow = true;
+    panelSeams.add(seam);
+  }
 
   const panelRing = new THREE.Mesh(
     new THREE.TorusGeometry(2.18, 0.025, 6, 64),
@@ -3934,7 +3933,7 @@ function createUfo() {
   trail.rotation.x = Math.PI;
   trail.position.y = -1.8;
 
-  group.add(boostGlow, saucer, rim, rivets, panelRing, alien, dome, engineGlow, trail);
+  group.add(boostGlow, saucer, rim, rivets, panelSeams, panelRing, alien, dome, engineGlow, trail);
   return { group, rim, trail, engineGlow, boostGlow };
 }
 
@@ -4744,27 +4743,20 @@ function spawnHazards() {
 }
 
 function addPatrolZoneMarker(centerX, centerZ, radius, index) {
-  const points = [];
-  const segments = 96;
-  for (let i = 0; i < segments; i += 1) {
-    const angle = (i / segments) * Math.PI * 2;
-    const x = centerX + Math.cos(angle) * radius;
-    const z = centerZ + Math.sin(angle) * radius;
-    points.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.18, z));
-  }
-
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  const marker = new THREE.LineLoop(
-    geometry,
-    new THREE.LineBasicMaterial({
-      color: 0xff4f68,
+  const marker = new THREE.Mesh(
+    new THREE.CircleGeometry(2.35, 48),
+    new THREE.MeshBasicMaterial({
+      color: 0xdaf8ed,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.22,
       depthWrite: false,
+      side: THREE.DoubleSide,
       fog: false
     })
   );
-  marker.name = `patrol-zone-marker-${index}`;
+  marker.rotation.x = -Math.PI / 2;
+  marker.position.set(centerX, maxTerrainHeightAround(centerX, centerZ, 3) + 0.28, centerZ);
+  marker.name = `patrol-center-marker-${index}`;
   marker.renderOrder = 2;
   addLevelObject(marker);
 }
