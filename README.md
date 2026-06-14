@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" alt="UFO Cow Hunt logo" width="25%">
 
-A small 3D browser game built with Three.js: fly a UFO across stylized low-poly night landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, desert ruins, frozen ridges, farm fields, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
+A small 3D browser game built with Three.js: fly a UFO across stylized low-poly night landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, desert ruins, frozen ridges, farm fields, improved night scenery, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
 
 ![UFO Cow Hunt](https://img.shields.io/badge/Three.js-3D%20Browsergame-79fff0)
 ![Vite](https://img.shields.io/badge/Vite-dev%20server-fff2a5)
@@ -39,17 +39,17 @@ Drone pressure can be changed in the settings menu:
 
 - Low-poly 3D landscapes with terrain, clouds, stars, moonlight, and level-specific props
 - Level selection with Farm Night, Desert Hunt, and Ice Drift
-- Farm Night with fields, ponds, trees, fences, hay bales, cows, and a rare bonus human
+- Farm Night with fields, improved ponds, trees, fences, hay bales, a windmill, a silo, cows, and a rare bonus human
 - Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
 - Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, and a polar explorer bonus human
-- Detailed UFO with metal rivets, glass dome, and a tiny alien inside
+- Detailed UFO with metal rivets, glass dome, cyan glow rings, and a tiny alien inside
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
 - Wave-specific animal behavior: boost scares animals from Wave 2 onward, and targets wander slowly in Wave 3
 - Rotating radar with targets, drones, and world boundary
 - Score system with combo multiplier and final score breakdown
 - Beam energy, boost, and touch-collected floating energy crystals with forgiving UFO-rim pickup contact
-- Search drones with louder contact alarms, visible red HUD feedback, scan beams, UFO slowdown, and energy-drain behavior
+- Search drones with louder contact alarms, visible red HUD feedback, scan beams, route-center markers, UFO slowdown, and energy-drain behavior
 - Difficulty setting for drone pressure: Easy disables drones, Normal uses 3 drones, and Hard uses 4 drones
 - Streamlined main menu with direct play, mission selection, and settings
 - Contextual tutorial hints for movement, beam use, energy crystals, drones, and boost
@@ -140,6 +140,7 @@ Playable prototype with three mission zones, timed waves, scoring, drone pressur
 - Added the full three-wave mission structure with timers, bonuses, and final score breakdown.
 - Expanded the game with mission-specific targets: cows, camels, and polar bears.
 - Added richer low-poly environments with landmarks, hazards, energy pickups, and themed scenery.
+- Polished the nighttime visuals with softer stars, cleaner drone markers, refined farm water, a windmill, a silo, and a more finished UFO design.
 - Improved the arcade feel with drone pressure, boost behavior, tutorial hints, settings, and layered audio.
 
 ## Roadmap
