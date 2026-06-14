@@ -85,8 +85,13 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: "high-performance"
 });
-const maxPixelRatio = 1.65;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
+const maxPixelRatio = 1.45;
+const minPixelRatio = 0.62;
+const maxRenderPixels = 3000000;
+const maxAoPixels = 900000;
+const maxBloomPixels = 1600000;
+const initialPixelRatio = getRenderPixelRatio();
+renderer.setPixelRatio(initialPixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -103,7 +108,7 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 18, 34);
 
 const composer = new EffectComposer(renderer);
-composer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
+composer.setPixelRatio(initialPixelRatio);
 composer.setSize(window.innerWidth, window.innerHeight);
 const renderPass = new RenderPass(scene, camera);
 const gtaoPass = new GTAOPass(
@@ -127,6 +132,7 @@ composer.addPass(renderPass);
 composer.addPass(gtaoPass);
 composer.addPass(bloomPass);
 composer.addPass(outputPass);
+applyRenderSizing();
 
 const clock = new THREE.Clock();
 const tempObject = new THREE.Object3D();
@@ -543,6 +549,7 @@ let missionStartTime = 0;
 let missionEndTime = 0;
 let takeoffUntil = 0;
 let lastHudUpdate = 0;
+let lastMinimapDraw = -Infinity;
 const maxMasterGain = 0.95;
 const maxEffectsGain = 2.15;
 const maxMusicGain = 0.82;
@@ -4997,7 +5004,10 @@ function tick() {
   updateCamera(delta);
   updateAudio();
   updateHud(false, elapsed);
-  drawMinimap(elapsed);
+  if (elapsed - lastMinimapDraw >= 0.05) {
+    lastMinimapDraw = elapsed;
+    drawMinimap(elapsed);
+  }
 
   composer.render();
 }
@@ -6309,14 +6319,46 @@ function lerpAngle(current, target, amount) {
   return current + delta * amount;
 }
 
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  const pixelRatio = Math.min(window.devicePixelRatio, maxPixelRatio);
+function getRenderPixelRatio() {
+  const nativeRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+  const viewportPixels = Math.max(1, window.innerWidth * window.innerHeight);
+  const budgetRatio = Math.sqrt(maxRenderPixels / viewportPixels);
+  const lowerBound = Math.min(nativeRatio, minPixelRatio);
+  return THREE.MathUtils.clamp(Math.min(nativeRatio, budgetRatio), lowerBound, nativeRatio);
+}
+
+function getScaledPassSize(scale, maxPixels) {
+  let width = Math.max(1, window.innerWidth * scale);
+  let height = Math.max(1, window.innerHeight * scale);
+  const pixels = width * height;
+  if (pixels > maxPixels) {
+    const ratio = Math.sqrt(maxPixels / pixels);
+    width *= ratio;
+    height *= ratio;
+  }
+  return {
+    width: Math.max(1, Math.floor(width)),
+    height: Math.max(1, Math.floor(height))
+  };
+}
+
+function applyRenderSizing() {
+  const pixelRatio = getRenderPixelRatio();
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setPixelRatio(pixelRatio);
   composer.setSize(window.innerWidth, window.innerHeight);
-  gtaoPass.setSize(Math.floor(window.innerWidth * 0.62), Math.floor(window.innerHeight * 0.62));
-  bloomPass.setSize(window.innerWidth, window.innerHeight);
+
+  const aoSize = getScaledPassSize(0.52, maxAoPixels);
+  gtaoPass.setSize(aoSize.width, aoSize.height);
+
+  const bloomSize = getScaledPassSize(0.74, maxBloomPixels);
+  bloomPass.setSize(bloomSize.width, bloomSize.height);
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  applyRenderSizing();
+  lastMinimapDraw = -Infinity;
 }
