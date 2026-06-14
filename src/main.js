@@ -86,8 +86,9 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: "high-performance"
 });
 const maxPixelRatio = 1.65;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
-renderer.setSize(window.innerWidth, window.innerHeight);
+const initialPixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+renderer.setPixelRatio(initialPixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight, false);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -103,7 +104,7 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 18, 34);
 
 const composer = new EffectComposer(renderer);
-composer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
+composer.setPixelRatio(initialPixelRatio);
 composer.setSize(window.innerWidth, window.innerHeight);
 const renderPass = new RenderPass(scene, camera);
 const gtaoPass = new GTAOPass(
@@ -128,10 +129,16 @@ composer.addPass(gtaoPass);
 composer.addPass(bloomPass);
 composer.addPass(outputPass);
 
+let lastRenderWidth = window.innerWidth;
+let lastRenderHeight = window.innerHeight;
+let lastRenderPixelRatio = initialPixelRatio;
+let resizeScheduled = false;
+
 const clock = new THREE.Clock();
 const tempObject = new THREE.Object3D();
 const tempVector = new THREE.Vector3();
 const tempVector2 = new THREE.Vector3();
+const radarPointScratch = { x: 0, y: 0 };
 
 const worldSize = 170;
 const halfWorld = worldSize / 2;
@@ -543,6 +550,7 @@ let missionStartTime = 0;
 let missionEndTime = 0;
 let takeoffUntil = 0;
 let lastHudUpdate = 0;
+let lastMinimapDraw = -Infinity;
 const maxMasterGain = 0.95;
 const maxEffectsGain = 2.15;
 const maxMusicGain = 0.82;
@@ -573,7 +581,7 @@ updateMissionCards();
 setUiState(UI_STATES.MAIN_MENU);
 updateHud(true);
 
-window.addEventListener("resize", onResize);
+window.addEventListener("resize", scheduleResize);
 window.addEventListener("pointerdown", initAudio, { once: true });
 window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", (event) => {
@@ -1160,17 +1168,18 @@ function createTutorialManager() {
     schedule(() => show("movement", "MOVE THE UFO", "WASD or Arrow Keys", { force: true }), 750);
   }
 
-  function event(name, payload = {}) {
+  function event(name, payload = null) {
     if (!enabled) return;
     if (!canShow() && name !== "missionEnded") return;
+    const eventDelta = typeof payload === "number" ? payload : payload?.delta || 0;
 
     if (name === "movementInput" && !steps.movement) {
-      moveInputTime += payload.delta || 0;
+      moveInputTime += eventDelta;
       if (moveInputTime > 0.72) complete("movement");
     }
 
     if (name === "movementInput" && beamWasUsed && steps.beam && !steps.boost && !boostScheduled) {
-      moveAfterBeamTime += payload.delta || 0;
+      moveAfterBeamTime += eventDelta;
       if (moveAfterBeamTime > 2.2) {
         queueBoostHint(1200);
       }
@@ -4968,7 +4977,8 @@ function createPatrolDrone(index) {
 }
 
 function tick() {
-  const delta = Math.min(clock.getDelta(), 0.033);
+  const rawDelta = clock.getDelta();
+  const delta = Math.min(rawDelta, 0.05);
   const elapsed = clock.elapsedTime;
   const gameplayActive = gameStarted && !gameWon && uiState === UI_STATES.PLAYING && !waveTransitionActive;
 
@@ -4997,7 +5007,10 @@ function tick() {
   updateCamera(delta);
   updateAudio();
   updateHud(false, elapsed);
-  drawMinimap(elapsed);
+  if (elapsed - lastMinimapDraw >= 1 / 30) {
+    lastMinimapDraw = elapsed;
+    drawMinimap(elapsed);
+  }
 
   composer.render();
 }
@@ -5016,7 +5029,7 @@ function updateUfo(delta, elapsed) {
   boostActive = boosting;
 
   if (moving || turnInput !== 0) {
-    tutorialManager.event("movementInput", { delta });
+    tutorialManager.event("movementInput", delta);
   }
   if (boosting) {
     tutorialManager.event("boostUsed");
@@ -5057,14 +5070,18 @@ function updateUfo(delta, elapsed) {
 
   const ground = terrainHeight(ufo.group.position.x, ufo.group.position.z);
   const desiredY = ground + ufoCruiseHeight + Math.sin(elapsed * 2.3) * 0.44;
-  ufo.group.position.y = THREE.MathUtils.lerp(ufo.group.position.y, desiredY, 0.07);
+  const hoverEase = frameLerpAmount(0.07, delta);
+  const pitchEase = frameLerpAmount(0.08, delta);
+  const bankEase = frameLerpAmount(0.1, delta);
+  const glowEase = frameLerpAmount(0.18, delta);
+  ufo.group.position.y = THREE.MathUtils.lerp(ufo.group.position.y, desiredY, hoverEase);
 
   const speed = ufoState.velocity.length();
   const pitch = THREE.MathUtils.clamp(-speed * 0.009, -0.22, 0.08);
   const bank = THREE.MathUtils.clamp(turnInput * -0.32, -0.34, 0.34);
-  ufo.group.rotation.x = THREE.MathUtils.lerp(ufo.group.rotation.x, pitch, 0.08);
-  ufo.group.rotation.z = THREE.MathUtils.lerp(ufo.group.rotation.z, bank, 0.1);
-  ufo.group.rotation.y = lerpAngle(ufo.group.rotation.y, ufoState.yaw, 0.08);
+  ufo.group.rotation.x = THREE.MathUtils.lerp(ufo.group.rotation.x, pitch, pitchEase);
+  ufo.group.rotation.z = THREE.MathUtils.lerp(ufo.group.rotation.z, bank, bankEase);
+  ufo.group.rotation.y = lerpAngle(ufo.group.rotation.y, ufoState.yaw, pitchEase);
   ufo.rim.rotation.z += delta * (boosting ? 5.2 : 2.5);
   ufo.trail.scale.set(1, boosting ? 1.75 : 0.9 + ufoState.velocity.length() * 0.02, 1);
   ufo.trail.material.opacity = boosting ? 0.38 : 0.2;
@@ -5072,7 +5089,7 @@ function updateUfo(delta, elapsed) {
   ufo.boostGlow.material.opacity = THREE.MathUtils.lerp(
     ufo.boostGlow.material.opacity,
     boosting ? 0.18 + Math.sin(elapsed * 16) * 0.035 : 0,
-    0.18
+    glowEase
   );
   ufo.boostGlow.scale.set(
     1.55 + (boosting ? Math.sin(elapsed * 12) * 0.03 : 0),
@@ -5086,8 +5103,10 @@ function handleUfoCollisions() {
   for (const collider of colliders) {
     const dx = ufo.group.position.x - collider.x;
     const dz = ufo.group.position.z - collider.z;
-    const distance = Math.hypot(dx, dz);
-    if (distance <= 0.001 || distance >= collider.radius) continue;
+    const distanceSq = dx * dx + dz * dz;
+    const radiusSq = collider.radius * collider.radius;
+    if (distanceSq <= 0.000001 || distanceSq >= radiusSq) continue;
+    const distance = Math.sqrt(distanceSq);
 
     const pushX = dx / distance;
     const pushZ = dz / distance;
@@ -5110,18 +5129,20 @@ function handleUfoCollisions() {
 }
 
 function updateTakeoff(delta, elapsed) {
+  const rotationEase = frameLerpAmount(0.08, delta);
+  const trailEase = frameLerpAmount(0.18, delta);
   if (elapsed > takeoffUntil) {
-    ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0, 0.08);
+    ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0, rotationEase);
     ufo.trail.scale.set(1, 0.8, 1);
     return;
   }
   const progress = THREE.MathUtils.clamp(1 - (takeoffUntil - elapsed) / 4.2, 0, 1);
   const liftSpeed = THREE.MathUtils.lerp(18, 64, progress);
   ufo.group.position.y += liftSpeed * delta;
-  ufo.group.rotation.x = THREE.MathUtils.lerp(ufo.group.rotation.x, -0.42, 0.08);
-  ufo.group.rotation.z = THREE.MathUtils.lerp(ufo.group.rotation.z, 0, 0.08);
+  ufo.group.rotation.x = THREE.MathUtils.lerp(ufo.group.rotation.x, -0.42, rotationEase);
+  ufo.group.rotation.z = THREE.MathUtils.lerp(ufo.group.rotation.z, 0, rotationEase);
   ufo.trail.scale.set(1.2 + progress * 0.6, 0.9, 1.2 + progress * 0.6);
-  ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0.18, 0.18);
+  ufo.trail.material.opacity = THREE.MathUtils.lerp(ufo.trail.material.opacity, 0.18, trailEase);
   ufo.engineGlow.intensity = 14 + progress * 10;
 }
 
@@ -5164,13 +5185,14 @@ function updateBeam(delta, elapsed) {
 
   const targetPos = target.position;
   const ufoPos = ufo.group.position;
-  targetPos.x = THREE.MathUtils.lerp(targetPos.x, ufoPos.x, 0.058);
-  targetPos.z = THREE.MathUtils.lerp(targetPos.z, ufoPos.z, 0.058);
+  const pullEase = frameLerpAmount(0.058, delta);
+  targetPos.x = THREE.MathUtils.lerp(targetPos.x, ufoPos.x, pullEase);
+  targetPos.z = THREE.MathUtils.lerp(targetPos.z, ufoPos.z, pullEase);
   targetPos.y += delta * 6.4;
   target.rotation.y += delta * 4.5;
   target.rotation.z = Math.sin(elapsed * 12) * 0.28;
 
-  if (target.position.distanceTo(ufo.group.position) < 2.7) {
+  if (target.position.distanceToSquared(ufo.group.position) < 2.7 * 2.7) {
     collectTarget(target);
   }
 }
@@ -5179,18 +5201,18 @@ function findBeamTarget() {
   if (waveTransitionActive) return null;
   const ufoPos = ufo.group.position;
   let best = null;
-  let bestDistance = Infinity;
+  let bestDistanceSq = Infinity;
 
   for (const item of collectibles) {
     if (item.userData.collected || item.userData.active === false) continue;
     const dx = item.position.x - ufoPos.x;
     const dz = item.position.z - ufoPos.z;
-    const horizontalDistance = Math.hypot(dx, dz);
-    const underUfo = horizontalDistance < 4.9;
+    const horizontalDistanceSq = dx * dx + dz * dz;
+    const underUfo = horizontalDistanceSq < 4.9 * 4.9;
     const withinBeamHeight = item.position.y < ufoPos.y && ufoPos.y - item.position.y < 19;
-    if (underUfo && withinBeamHeight && horizontalDistance < bestDistance) {
+    if (underUfo && withinBeamHeight && horizontalDistanceSq < bestDistanceSq) {
       best = item;
-      bestDistance = horizontalDistance;
+      bestDistanceSq = horizontalDistanceSq;
     }
   }
   return best;
@@ -5230,7 +5252,7 @@ function collectTarget(target) {
     totalCowsCollected += 1;
     if (waveCowsCollected >= waveCowGoal) completeWave(now);
   }
-  tutorialManager.event("targetAbducted", { type: target.userData.type });
+  tutorialManager.event("targetAbducted");
   updateHud(true, now);
 }
 
@@ -5240,10 +5262,10 @@ function updateCollectibles(delta, elapsed) {
     updateCollectibleMovement(item, delta, elapsed);
     item.position.y = item.userData.baseY + Math.sin(elapsed * 1.7 + item.userData.wobble) * 0.06;
     if (item.userData.type === "bonus") {
-      item.rotation.y += 0.017;
+      item.rotation.y += delta * 1.02;
       item.rotation.z = Math.sin(elapsed * 4.2) * 0.18;
     } else {
-      item.rotation.y += Math.sin(elapsed * 0.8 + index) * 0.0015;
+      item.rotation.y += Math.sin(elapsed * 0.8 + index) * delta * 0.09;
     }
   });
 }
@@ -5292,8 +5314,8 @@ function updateCollectibleMovement(item, delta, elapsed) {
 
 function maybeScareCow(cow, elapsed) {
   if (!boostActive || waveTransitionActive || elapsed < cow.userData.scareCooldownUntil) return;
-  const distance = horizontalDistance(cow.position, ufo.group.position);
-  if (distance > 15 || distance < 0.1) return;
+  const distanceSq = horizontalDistanceSq(cow.position, ufo.group.position);
+  if (distanceSq > 15 * 15 || distanceSq < 0.1 * 0.1) return;
 
   const awayX = cow.position.x - ufo.group.position.x;
   const awayZ = cow.position.z - ufo.group.position.z;
@@ -5359,10 +5381,7 @@ function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance) {
 }
 
 function updateCowHint(elapsed) {
-  const remainingCows = collectibles.filter(
-    (item) => item.userData.type === "animal" && item.userData.active !== false && !item.userData.collected
-  );
-  const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
+  const lastCow = getSingleRemainingAnimal();
 
   if (!lastCow || lastCow === abductingTarget) {
     cowHint.visible = false;
@@ -5380,14 +5399,26 @@ function updateCowHint(elapsed) {
   cowHint.scale.setScalar(0.9 + Math.sin(elapsed * 5.5) * 0.08);
 }
 
+function getSingleRemainingAnimal() {
+  let remainingAnimal = null;
+  for (const item of collectibles) {
+    if (item.userData.type !== "animal" || item.userData.active === false || item.userData.collected) continue;
+    if (remainingAnimal) return null;
+    remainingAnimal = item;
+  }
+  return remainingAnimal;
+}
+
 function updatePowerups(delta, elapsed, active = true) {
+  const pickupRadius = ufoPickupRadius + energyCorePickupRadius;
+  const pickupRadiusSq = pickupRadius * pickupRadius;
   for (const powerup of powerups) {
     if (powerup.userData.collected) continue;
     powerup.position.y = powerup.userData.baseY + Math.sin(elapsed * 2.4 + powerup.position.x) * 0.18;
     powerup.rotation.y += delta * 2.1;
     powerup.children[1].rotation.z += delta * 1.9;
 
-    if (active && powerup.position.distanceTo(ufo.group.position) < ufoPickupRadius + energyCorePickupRadius) {
+    if (active && powerup.position.distanceToSquared(ufo.group.position) < pickupRadiusSq) {
       powerup.userData.collected = true;
       powerup.visible = false;
       score += 50;
@@ -5423,8 +5454,10 @@ function updateHazards(delta, elapsed, active = true) {
       for (const rotor of data.rotors) rotor.rotation.z += delta * 24;
     }
 
-    const distance = hazard.position.distanceTo(ufo.group.position);
-    if (active && distance < data.warningRadius) {
+    const distanceSq = hazard.position.distanceToSquared(ufo.group.position);
+    const warningRadiusSq = data.warningRadius * data.warningRadius;
+    if (active && distanceSq < warningRadiusSq) {
+      const distance = Math.sqrt(distanceSq);
       const lockStrength = THREE.MathUtils.clamp(1 - distance / data.warningRadius, 0.12, 1);
       const contactStrength = THREE.MathUtils.smoothstep(lockStrength, 0.42, 0.92);
       strongestLock = Math.max(strongestLock, lockStrength);
@@ -5449,7 +5482,7 @@ function updateHazards(delta, elapsed, active = true) {
 
   if (active && detected) {
     droneDrainUntil = elapsed + 0.25;
-    droneDrainStrength = THREE.MathUtils.lerp(droneDrainStrength, strongestLock, 0.45);
+    droneDrainStrength = THREE.MathUtils.lerp(droneDrainStrength, strongestLock, frameLerpAmount(0.45, delta));
     tutorialManager.event("droneDetected");
   }
 
@@ -5721,15 +5754,12 @@ function drawMinimap(elapsed) {
     minimap.stroke();
   }
 
-  const remainingCows = collectibles.filter(
-    (item) => item.userData.type === "animal" && item.userData.active !== false && !item.userData.collected
-  );
-  const lastCow = remainingCows.length === 1 ? remainingCows[0] : null;
+  const lastCow = getSingleRemainingAnimal();
 
   drawMapDots(collectibles, (item) => {
     if (item.userData.collected || item.userData.active === false) return null;
     if (item.userData.type === "bonus") {
-      const near = horizontalDistance(item.position, ufo.group.position) < 42;
+      const near = horizontalDistanceSq(item.position, ufo.group.position) < 42 * 42;
       return near ? "#ff77dd" : "rgba(255, 119, 221, 0.28)";
     }
     if (item === lastCow) return null;
@@ -5830,10 +5860,13 @@ function drawMapWater(size, scale) {
     minimap.beginPath();
     for (let i = 0; i <= 40; i += 1) {
       const angle = (i / 40) * Math.PI * 2;
-      const point = radarPoint({
-        x: body.x + Math.cos(angle) * body.rx,
-        z: body.z + Math.sin(angle) * body.rz
-      }, size, scale, false);
+      const point = radarPointFromCoords(
+        body.x + Math.cos(angle) * body.rx,
+        body.z + Math.sin(angle) * body.rz,
+        size,
+        scale,
+        false
+      );
       if (i === 0) minimap.moveTo(point.x, point.y);
       else minimap.lineTo(point.x, point.y);
     }
@@ -5844,18 +5877,15 @@ function drawMapWater(size, scale) {
 }
 
 function drawMapBoundary(size, scale) {
-  const corners = [
-    { x: -halfWorld, z: -halfWorld },
-    { x: halfWorld, z: -halfWorld },
-    { x: halfWorld, z: halfWorld },
-    { x: -halfWorld, z: halfWorld }
-  ].map((corner) => radarPoint(corner, size, scale, false));
-
+  let point = radarPointFromCoords(-halfWorld, -halfWorld, size, scale, false);
   minimap.beginPath();
-  minimap.moveTo(corners[0].x, corners[0].y);
-  for (let i = 1; i < corners.length; i += 1) {
-    minimap.lineTo(corners[i].x, corners[i].y);
-  }
+  minimap.moveTo(point.x, point.y);
+  point = radarPointFromCoords(halfWorld, -halfWorld, size, scale, false);
+  minimap.lineTo(point.x, point.y);
+  point = radarPointFromCoords(halfWorld, halfWorld, size, scale, false);
+  minimap.lineTo(point.x, point.y);
+  point = radarPointFromCoords(-halfWorld, halfWorld, size, scale, false);
+  minimap.lineTo(point.x, point.y);
   minimap.closePath();
   minimap.strokeStyle = "rgba(150, 220, 255, 0.22)";
   minimap.lineWidth = 1.2;
@@ -5863,8 +5893,12 @@ function drawMapBoundary(size, scale) {
 }
 
 function radarPoint(position, size, scale, clip = true) {
-  const dx = position.x - ufo.group.position.x;
-  const dz = position.z - ufo.group.position.z;
+  return radarPointFromCoords(position.x, position.z, size, scale, clip);
+}
+
+function radarPointFromCoords(x, z, size, scale, clip = true) {
+  const dx = x - ufo.group.position.x;
+  const dz = z - ufo.group.position.z;
   const rightX = -ufoState.heading.z;
   const rightZ = ufoState.heading.x;
   const screenX = size / 2 + (dx * rightX + dz * rightZ) * scale;
@@ -5872,7 +5906,9 @@ function radarPoint(position, size, scale, clip = true) {
   if (clip && (screenX < -10 || screenX > size + 10 || screenY < -10 || screenY > size + 10)) {
     return null;
   }
-  return { x: screenX, y: screenY };
+  radarPointScratch.x = screenX;
+  radarPointScratch.y = screenY;
+  return radarPointScratch;
 }
 
 function initAudio() {
@@ -6296,8 +6332,10 @@ function flashMessage(text, detail = "") {
   }, 1900);
 }
 
-function horizontalDistance(a, b) {
-  return Math.hypot(a.x - b.x, a.z - b.z);
+function horizontalDistanceSq(a, b) {
+  const dx = a.x - b.x;
+  const dz = a.z - b.z;
+  return dx * dx + dz * dz;
 }
 
 function capitalize(text) {
@@ -6309,14 +6347,45 @@ function lerpAngle(current, target, amount) {
   return current + delta * amount;
 }
 
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  const pixelRatio = Math.min(window.devicePixelRatio, maxPixelRatio);
-  renderer.setPixelRatio(pixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setPixelRatio(pixelRatio);
-  composer.setSize(window.innerWidth, window.innerHeight);
-  gtaoPass.setSize(Math.floor(window.innerWidth * 0.62), Math.floor(window.innerHeight * 0.62));
-  bloomPass.setSize(window.innerWidth, window.innerHeight);
+function frameLerpAmount(amountAt60Fps, delta) {
+  return 1 - Math.pow(1 - amountAt60Fps, delta * 60);
+}
+
+function scheduleResize() {
+  if (resizeScheduled) return;
+  resizeScheduled = true;
+
+  requestAnimationFrame(() => {
+    resizeScheduled = false;
+    resizeGame();
+  });
+}
+
+function resizeGame() {
+  const width = Math.max(1, window.innerWidth);
+  const height = Math.max(1, window.innerHeight);
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+  const sizeChanged = width !== lastRenderWidth || height !== lastRenderHeight;
+  const pixelRatioChanged = pixelRatio !== lastRenderPixelRatio;
+
+  if (!sizeChanged && !pixelRatioChanged) return;
+
+  if (sizeChanged) {
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+
+  if (pixelRatioChanged) {
+    renderer.setPixelRatio(pixelRatio);
+    composer.setPixelRatio(pixelRatio);
+  }
+
+  renderer.setSize(width, height, false);
+  composer.setSize(width, height);
+  gtaoPass.setSize(Math.floor(width * 0.62), Math.floor(height * 0.62));
+  bloomPass.setSize(width, height);
+
+  lastRenderWidth = width;
+  lastRenderHeight = height;
+  lastRenderPixelRatio = pixelRatio;
 }
