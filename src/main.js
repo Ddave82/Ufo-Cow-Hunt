@@ -178,6 +178,20 @@ const farmLandmarks = {
   silo: { x: 70, z: -68, rx: 8, rz: 8 },
   windmill: { x: 6, z: -47, rx: 10, rz: 10, rotation: 3.05 }
 };
+const farmPathPoints = [
+  [-82, 72],
+  [-46, 72],
+  [-8, 70],
+  [28, 65],
+  [55, 52],
+  [69, 28],
+  [76, -8],
+  [74, -48],
+  [70, -68],
+  [42, -72],
+  [17, -66],
+  [6, -47]
+];
 const farmSpawnBlockers = [
   { x: 48, z: 48, rx: 14, rz: 12 },
   farmLandmarks.silo,
@@ -305,7 +319,7 @@ const visualPresets = {
     skyTop: 0x010615,
     skyHorizon: 0x071c33,
     starColor: 0xdcf6ff,
-    starOpacity: 0.82,
+    starOpacity: 1.16,
     moonGlow: 0x6fb8ff,
     moonGlowOpacity: 0.16
   },
@@ -329,7 +343,7 @@ const visualPresets = {
     skyTop: 0x08030d,
     skyHorizon: 0x2c1321,
     starColor: 0xffe6c6,
-    starOpacity: 0.76,
+    starOpacity: 1.08,
     moonGlow: 0xff9f7a,
     moonGlowOpacity: 0.1
   },
@@ -353,7 +367,7 @@ const visualPresets = {
     skyTop: 0x010817,
     skyHorizon: 0x07304a,
     starColor: 0xe8fbff,
-    starOpacity: 0.9,
+    starOpacity: 1.14,
     moonGlow: 0x92eaff,
     moonGlowOpacity: 0.18
   }
@@ -1276,9 +1290,9 @@ function createTerrain() {
         Math.cos(x * 0.11 - z * 0.15) * 0.014;
       const sandLight = THREE.MathUtils.clamp(0.43 + height * 0.004 + dune * 0.028 + detail * 0.13 + fineSand, 0.36, 0.54);
       color.setHSL(0.1 + Math.sin(x * 0.021 + z * 0.013) * 0.005, 0.78, sandLight);
-      if (path > 0.28) color.setHSL(0.092, 0.68, sandLight - 0.025 + path * 0.018);
-      if (ridge > 0.46) color.setHSL(0.082, 0.62, sandLight - 0.015 + ridge * 0.024);
-      if (height > 5.4) color.setHSL(0.085, 0.58, THREE.MathUtils.clamp(sandLight + 0.018, 0.38, 0.56));
+      if (path > 0.35) color.offsetHSL(-0.006, -0.06, -path * 0.022);
+      if (ridge > 0.46) color.offsetHSL(-0.012, -0.08, ridge * 0.014);
+      if (height > 5.4) color.offsetHSL(-0.004, -0.06, 0.014);
     } else if (activeLevelId === "ice") {
       const frost = iceFrostAmount(x, z);
       const snowLight = THREE.MathUtils.clamp(0.48 + height * 0.006 + frost * 0.075 + detail * 0.22, 0.38, 0.68);
@@ -1469,9 +1483,18 @@ function dryLandAmount(x, z) {
     pastureAmount(x, z) * 0.62,
     softRectAmount(x, z, 54, 43, 31, 26),
     softRectAmount(x, z, -55, 57, 36, 25) * 0.75,
-    1 - distanceToSegment(x, z, -76, 59, 56, 42) / 9.5,
-    1 - distanceToSegment(x, z, 10, 31, 57, 43) / 8.5
+    pathFromPointsAmount(x, z, farmPathPoints, 9.5)
   );
+}
+
+function pathFromPointsAmount(x, z, points, width) {
+  let amount = 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const [ax, az] = points[i];
+    const [bx, bz] = points[i + 1];
+    amount = Math.max(amount, 1 - distanceToSegment(x, z, ax, az, bx, bz) / width);
+  }
+  return Math.max(0, amount);
 }
 
 function pathAmount(x, z) {
@@ -1493,13 +1516,7 @@ function pathAmount(x, z) {
       1 - distanceToSegment(x, z, -52, -46, 44, -12) / 4.4
     );
   }
-  return Math.max(
-    0,
-    1 - distanceToSegment(x, z, -78, 60, -38, 40) / 5.4,
-    1 - distanceToSegment(x, z, -38, 40, 12, 30) / 4.2,
-    1 - distanceToSegment(x, z, 12, 30, 54, 43) / 4.8,
-    1 - distanceToSegment(x, z, 12, 30, 30, -18) / 3.8
-  );
+  return pathFromPointsAmount(x, z, farmPathPoints, 4.8);
 }
 
 function pastureAmount(x, z) {
@@ -1577,9 +1594,10 @@ function addNightSky() {
   scene.add(skyDome);
 
   const layers = [
-    { count: 520, radius: 130, radiusRange: 145, minY: 44, maxY: 150, size: 0.34, opacity: 0.74, seed: 11 },
-    { count: 260, radius: 145, radiusRange: 130, minY: 58, maxY: 164, size: 0.58, opacity: 0.58, seed: 29 },
-    { count: 80, radius: 160, radiusRange: 110, minY: 78, maxY: 168, size: 0.9, opacity: 0.48, seed: 53 }
+    { count: 260, radius: 210, elevationMin: 0.04, elevationRange: 0.22, size: 1.9, opacity: 0.72, seed: 7 },
+    { count: 340, radius: 218, elevationMin: 0.18, elevationRange: 0.58, size: 1.45, opacity: 0.72, seed: 11 },
+    { count: 150, radius: 224, elevationMin: 0.34, elevationRange: 0.5, size: 1.8, opacity: 0.58, seed: 29 },
+    { count: 42, radius: 232, elevationMin: 0.48, elevationRange: 0.36, size: 2.25, opacity: 0.42, seed: 53 }
   ];
 
   layers.forEach((layer) => {
@@ -1588,11 +1606,11 @@ function addNightSky() {
 
     for (let i = 0; i < layer.count; i += 1) {
       const angle = (i * 2.399963 + layer.seed) % (Math.PI * 2);
-      const radialNoise = ((i * 37 + layer.seed * 19) % 100) / 100;
-      const heightNoise = ((i * 61 + layer.seed * 13) % 100) / 100;
-      const radius = layer.radius + radialNoise * layer.radiusRange;
-      const y = layer.minY + heightNoise * (layer.maxY - layer.minY);
-      starPositions.push(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+      const elevationNoise = ((i * 61 + layer.seed * 13) % 100) / 100;
+      const elevation = layer.elevationMin + elevationNoise * layer.elevationRange;
+      const horizontalRadius = Math.cos(elevation) * layer.radius;
+      const y = Math.sin(elevation) * layer.radius + 18;
+      starPositions.push(Math.cos(angle) * horizontalRadius, y, Math.sin(angle) * horizontalRadius);
     }
 
     starGeometry.setAttribute("position", new THREE.Float32BufferAttribute(starPositions, 3));
@@ -1601,12 +1619,16 @@ function addNightSky() {
       new THREE.PointsMaterial({
         color: 0xd9f3ff,
         size: layer.size,
-        sizeAttenuation: true,
+        sizeAttenuation: false,
         transparent: true,
-        opacity: layer.opacity
+        opacity: layer.opacity,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending
       })
     );
     stars.userData.baseOpacity = layer.opacity;
+    stars.renderOrder = -900;
     starLayers.push(stars);
     scene.add(stars);
   });
@@ -1720,7 +1742,6 @@ function addLandscapeDetails() {
     addDesertDetails();
     addRocks();
     addClouds();
-    addFireflies();
     return;
   }
 
@@ -1733,13 +1754,13 @@ function addLandscapeDetails() {
     addIceDetails();
     addRocks();
     addClouds();
-    addFireflies();
     return;
   }
 
   addDistantHorizon();
   addWater();
   addShoreDetails();
+  addComposedShorelineClusters();
   addMeadowPatches();
   addBoundaryFence();
   addFarmDetails();
@@ -1747,7 +1768,6 @@ function addLandscapeDetails() {
   addRocks();
   addCropCircles();
   addClouds();
-  addFireflies();
 }
 
 function addDesertGroundDetails() {
@@ -2973,6 +2993,83 @@ function addShoreDetails() {
   addLevelObject(reedMesh, pebbleMesh);
 }
 
+function addComposedShorelineClusters() {
+  const dampMaterial = new THREE.MeshBasicMaterial({
+    color: 0x17251f,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+  const rockMaterial = new THREE.MeshStandardMaterial({
+    color: 0x536160,
+    roughness: 0.96,
+    flatShading: true
+  });
+  const accentRockMaterial = new THREE.MeshStandardMaterial({
+    color: 0x67736e,
+    roughness: 0.94,
+    flatShading: true
+  });
+  const reedMaterial = new THREE.MeshStandardMaterial({ color: 0x244b31, roughness: 0.92 });
+  const dampGeometry = new THREE.CircleGeometry(1, 20);
+  const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
+  const reedGeometry = new THREE.ConeGeometry(0.1, 0.82, 5);
+  const clusters = [
+    { body: 0, angle: 0.24, rocks: 5, reeds: 8, scale: 1.05 },
+    { body: 0, angle: 2.4, rocks: 4, reeds: 5, scale: 0.86 },
+    { body: 0, angle: 4.9, rocks: 3, reeds: 7, scale: 0.72 },
+    { body: 1, angle: 1.2, rocks: 4, reeds: 5, scale: 0.82 },
+    { body: 1, angle: 3.65, rocks: 3, reeds: 4, scale: 0.66 }
+  ];
+
+  clusters.forEach((cluster, clusterIndex) => {
+    const body = waterBodies[cluster.body];
+    if (!body) return;
+    const anchorX = body.x + Math.cos(cluster.angle) * body.rx * 1.13;
+    const anchorZ = body.z + Math.sin(cluster.angle) * body.rz * 1.13;
+    if (!isDryObjectSpot(anchorX, anchorZ, 2.2)) return;
+    const baseY = terrainHeight(anchorX, anchorZ);
+
+    const damp = new THREE.Mesh(dampGeometry, dampMaterial);
+    damp.rotation.x = -Math.PI / 2;
+    damp.rotation.z = cluster.angle + 0.7;
+    damp.position.set(anchorX, baseY + 0.082, anchorZ);
+    damp.scale.set(3.2 * cluster.scale, 1.05 * cluster.scale, 1);
+    addLevelObject(damp);
+
+    for (let i = 0; i < cluster.rocks; i += 1) {
+      const spreadAngle = cluster.angle + (i - cluster.rocks * 0.5) * 0.32;
+      const offset = 0.55 + i * 0.34;
+      const x = anchorX + Math.cos(spreadAngle) * offset;
+      const z = anchorZ + Math.sin(spreadAngle) * offset * 0.75;
+      if (isWater(x, z, 0.4)) continue;
+      const rock = new THREE.Mesh(rockGeometry, i === 0 && cluster.scale > 0.8 ? accentRockMaterial : rockMaterial);
+      const scale = (i === 0 ? 0.68 : 0.32 + (i % 3) * 0.11) * cluster.scale;
+      rock.position.set(x, terrainHeight(x, z) + scale * 0.38, z);
+      rock.scale.set(scale * 1.25, scale * 0.46, scale * 0.82);
+      rock.rotation.set(i * 0.27, cluster.angle + i * 0.5, i * 0.13);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      addLevelObject(rock);
+    }
+
+    for (let i = 0; i < cluster.reeds; i += 1) {
+      const fan = cluster.angle + (i - cluster.reeds * 0.5) * 0.14;
+      const x = anchorX + Math.cos(fan) * (1.4 + (i % 3) * 0.26);
+      const z = anchorZ + Math.sin(fan) * (0.65 + (i % 4) * 0.12);
+      if (isWater(x, z, 0.3)) continue;
+      const reed = new THREE.Mesh(reedGeometry, reedMaterial);
+      const scale = (0.56 + (i % 3) * 0.14) * cluster.scale;
+      reed.position.set(x, terrainHeight(x, z) + 0.38 * scale, z);
+      reed.rotation.set(0.08 * Math.sin(i), fan, 0.1 * Math.cos(i));
+      reed.scale.set(scale, scale, scale);
+      reed.castShadow = true;
+      addLevelObject(reed);
+    }
+  });
+}
+
 function addMeadowPatches() {
   const patchMaterial = new THREE.MeshBasicMaterial({
     color: 0x345f36,
@@ -3179,14 +3276,29 @@ function addWindmill() {
   const group = new THREE.Group();
   const foundationMaterial = new THREE.MeshStandardMaterial({ color: 0x3b2a20, roughness: 0.9 });
   const plasterMaterial = new THREE.MeshStandardMaterial({
-    color: 0xc6c0aa,
-    emissive: 0x10100c,
-    roughness: 0.82,
+    color: 0xd2ccb8,
+    emissive: 0x171814,
+    emissiveIntensity: 0.08,
+    roughness: 0.76,
     flatShading: true
   });
-  const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3125, roughness: 0.86 });
+  const moonSideMaterial = new THREE.MeshStandardMaterial({
+    color: 0xaeb8bc,
+    emissive: 0x08131d,
+    emissiveIntensity: 0.14,
+    roughness: 0.72,
+    flatShading: true
+  });
+  const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x5a3d2e, roughness: 0.84 });
+  const bladeSailMaterial = new THREE.MeshStandardMaterial({
+    color: 0xcfc6aa,
+    emissive: 0x12130f,
+    emissiveIntensity: 0.08,
+    roughness: 0.78,
+    flatShading: true
+  });
   const roofMaterial = new THREE.MeshStandardMaterial({
-    color: 0xb69042,
+    color: 0xc2a04a,
     emissive: 0x1b1205,
     roughness: 0.9,
     flatShading: true
@@ -3204,6 +3316,10 @@ function addWindmill() {
   tower.castShadow = true;
   tower.receiveShadow = true;
 
+  const moonlitSide = new THREE.Mesh(new THREE.BoxGeometry(0.09, 9.2, 2.5), moonSideMaterial);
+  moonlitSide.position.set(-2.26, 6.2, -0.2);
+  moonlitSide.rotation.y = 0.09;
+
   const lowerBand = new THREE.Mesh(new THREE.CylinderGeometry(3.95, 4.2, 0.42, 9), beamMaterial);
   lowerBand.position.y = 1.42;
   const upperBand = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.7, 0.32, 9), beamMaterial);
@@ -3219,6 +3335,12 @@ function addWindmill() {
   window.position.set(1.28, 7.9, -2.45);
   const windowGlow = new THREE.PointLight(0xffc46a, 0.72, 10, 1.85);
   windowGlow.position.copy(window.position);
+  windowGlow.intensity = 1.08;
+  windowGlow.distance = 11;
+
+  const coolRim = new THREE.PointLight(0x8fcaff, 0.48, 18, 2.1);
+  coolRim.position.set(-4.6, 8.2, 3.8);
+  coolRim.castShadow = false;
 
   const rotor = new THREE.Group();
   rotor.position.set(0, 11.65, -2.92);
@@ -3233,7 +3355,7 @@ function addWindmill() {
     const spar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 6.6, 0.18), beamMaterial);
     spar.position.y = 3.25;
     spar.castShadow = true;
-    const sail = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.8, 0.1), plasterMaterial);
+    const sail = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.8, 0.1), bladeSailMaterial);
     sail.position.set(0.36, 4.45, 0);
     sail.rotation.z = -0.12;
     sail.castShadow = true;
@@ -3243,7 +3365,7 @@ function addWindmill() {
 
   rotor.userData.rotationSpeed = 0.56;
   windmillRotors.push(rotor);
-  group.add(foundation, tower, lowerBand, upperBand, roof, door, window, windowGlow, rotor);
+  group.add(foundation, tower, moonlitSide, lowerBand, upperBand, roof, door, window, windowGlow, coolRim, rotor);
   group.rotation.y = rotation;
   group.position.set(x, terrainHeight(x, z) + 0.03, z);
   addLevelObject(group);
@@ -3421,12 +3543,19 @@ function addPathStones() {
     roughness: 0.96
   });
   const points = [];
-  for (let i = 0; i < 36; i += 1) {
-    const t = i / 35;
-    points.push([
-      THREE.MathUtils.lerp(-72, 44, t) + Math.sin(i * 1.9) * 2.1,
-      THREE.MathUtils.lerp(56, 43, t) + Math.cos(i * 1.3) * 1.5
-    ]);
+  for (let segment = 0; segment < farmPathPoints.length - 1; segment += 1) {
+    const [x1, z1] = farmPathPoints[segment];
+    const [x2, z2] = farmPathPoints[segment + 1];
+    const length = Math.hypot(x2 - x1, z2 - z1);
+    const steps = Math.max(2, Math.floor(length / 8));
+    for (let step = 0; step < steps; step += 1) {
+      const t = step / steps;
+      const index = points.length;
+      points.push([
+        THREE.MathUtils.lerp(x1, x2, t) + Math.sin(index * 1.9) * 1.1,
+        THREE.MathUtils.lerp(z1, z2, t) + Math.cos(index * 1.3) * 0.9
+      ]);
+    }
   }
 
   points.forEach(([x, z], index) => {
@@ -4571,7 +4700,7 @@ function createEnergyCore() {
     new THREE.MeshStandardMaterial({
       color: 0x6ffff2,
       emissive: 0x21d8cb,
-      emissiveIntensity: 1.2,
+      emissiveIntensity: 0.58,
       roughness: 0.18,
       metalness: 0.08
     })
@@ -4580,15 +4709,15 @@ function createEnergyCore() {
 
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(0.98, 0.04, 8, 28),
-    new THREE.MeshBasicMaterial({ color: 0xbffff8, transparent: true, opacity: 0.76 })
+    new THREE.MeshBasicMaterial({ color: 0xbffff8, transparent: true, opacity: 0.48 })
   );
   ring.rotation.x = Math.PI / 2;
   const aura = new THREE.Mesh(
-    new THREE.SphereGeometry(1.05, 18, 12),
+    new THREE.SphereGeometry(0.78, 16, 10),
     new THREE.MeshBasicMaterial({
       color: 0x6ffff2,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.07,
       depthWrite: false
     })
   );
@@ -4599,6 +4728,7 @@ function createEnergyCore() {
 function spawnHazards() {
   const droneCount = difficultyConfigs[difficulty]?.droneCount ?? difficultyConfigs.normal.droneCount;
   getActiveLevel().hazardSpots.slice(0, droneCount).forEach(([x, z, radius, speed], index) => {
+    addPatrolZoneMarker(x, z, radius, index);
     const hazard = createPatrolDrone(index);
     hazard.userData = {
       ...hazard.userData,
@@ -4611,6 +4741,32 @@ function spawnHazards() {
     hazards.push(hazard);
     addLevelObject(hazard);
   });
+}
+
+function addPatrolZoneMarker(centerX, centerZ, radius, index) {
+  const points = [];
+  const segments = 96;
+  for (let i = 0; i < segments; i += 1) {
+    const angle = (i / segments) * Math.PI * 2;
+    const x = centerX + Math.cos(angle) * radius;
+    const z = centerZ + Math.sin(angle) * radius;
+    points.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.18, z));
+  }
+
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const marker = new THREE.LineLoop(
+    geometry,
+    new THREE.LineBasicMaterial({
+      color: 0xff4f68,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false,
+      fog: false
+    })
+  );
+  marker.name = `patrol-zone-marker-${index}`;
+  marker.renderOrder = 2;
+  addLevelObject(marker);
 }
 
 function createPatrolDrone(index) {
