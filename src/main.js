@@ -676,7 +676,7 @@ function onKeyDown(event) {
   keys.add(key);
 
   if (key === "Space") {
-    beamLatchUntil = performance.now() + 2050;
+    beamLatchUntil = performance.now() + 1900;
   }
 }
 
