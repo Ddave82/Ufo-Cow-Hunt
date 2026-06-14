@@ -2879,23 +2879,19 @@ function addWater() {
     transparent: true,
     opacity: 0.58
   });
-  const shallowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x61b5a1,
+  const baseWaterMaterial = new THREE.MeshStandardMaterial({
+    color: 0x0a4165,
+    emissive: 0x0a5f82,
+    emissiveIntensity: 0.16,
+    roughness: 0.36,
+    metalness: 0.12,
     transparent: true,
-    opacity: 0.12,
-    side: THREE.DoubleSide,
+    opacity: 0.94,
     depthWrite: false
   });
-  const waterMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0b3959,
-    emissive: 0x0d6c91,
-    emissiveIntensity: 0.22,
-    roughness: 0.18,
-    metalness: 0.28,
-    transparent: true,
-    opacity: 0.9
-  });
   waterBodies.forEach((body, index) => {
+    const isLargeLake = body.rx > 18;
+    const waterY = isLargeLake ? terrainHeight(body.x, body.z) + 0.02 : waterSurfaceHeight(body);
     const shore = new THREE.Mesh(new THREE.RingGeometry(0.96, 1.22, 72), shoreMaterial);
     shore.rotation.x = -Math.PI / 2;
     shore.position.set(body.x, terrainHeight(body.x, body.z) + 0.035, body.z);
@@ -2903,22 +2899,39 @@ function addWater() {
     shore.receiveShadow = true;
     addLevelObject(shore);
 
-    const shallow = new THREE.Mesh(new THREE.RingGeometry(0.72, 1.02, 72), shallowMaterial);
-    shallow.rotation.x = -Math.PI / 2;
-    shallow.position.set(body.x, terrainHeight(body.x, body.z) + 0.11, body.z);
-    shallow.scale.set(body.rx, body.rz, 1);
-    addLevelObject(shallow);
+    if (isLargeLake) return;
 
+    const waterMaterial = baseWaterMaterial.clone();
     const water = new THREE.Mesh(new THREE.CircleGeometry(1, 72), waterMaterial);
     water.rotation.x = -Math.PI / 2;
-    water.position.set(body.x, terrainHeight(body.x, body.z) + 0.1, body.z);
+    water.position.set(body.x, waterY, body.z);
     water.scale.set(body.rx, body.rz, 1);
     water.receiveShadow = true;
     water.name = `moonlit-pond-${index}`;
-    water.userData = { waveOffset: index * 0.8 + body.x * 0.03 };
+    water.userData = {
+      waveOffset: index * 0.8 + body.x * 0.03,
+      baseEmissive: 0.16,
+      pulseEmissive: 0.032
+    };
     waterSurfaces.push(water);
     addLevelObject(water);
   });
+}
+
+function waterSurfaceHeight(body) {
+  let maxHeight = terrainHeight(body.x, body.z);
+  const innerSampleLimit = body.rx > 18 ? 0.28 : 0.52;
+  for (let ix = -4; ix <= 4; ix += 1) {
+    for (let iz = -4; iz <= 4; iz += 1) {
+      const nx = ix / 4;
+      const nz = iz / 4;
+      if (nx * nx + nz * nz > innerSampleLimit) continue;
+      const x = body.x + nx * body.rx;
+      const z = body.z + nz * body.rz;
+      maxHeight = Math.max(maxHeight, terrainHeight(x, z));
+    }
+  }
+  return maxHeight + (body.rx > 18 ? 0.08 : 0.14);
 }
 
 function addShoreDetails() {
@@ -3255,24 +3268,24 @@ function addWindmill() {
   const group = new THREE.Group();
   const foundationMaterial = new THREE.MeshStandardMaterial({ color: 0x3b2a20, roughness: 0.9 });
   const plasterMaterial = new THREE.MeshStandardMaterial({
-    color: 0xd2ccb8,
-    emissive: 0x171814,
-    emissiveIntensity: 0.08,
-    roughness: 0.76,
-    flatShading: true
-  });
-  const moonSideMaterial = new THREE.MeshStandardMaterial({
-    color: 0xaeb8bc,
-    emissive: 0x08131d,
+    color: 0xe1ddca,
+    emissive: 0x202720,
     emissiveIntensity: 0.14,
     roughness: 0.72,
     flatShading: true
   });
+  const moonSideMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc1ccd0,
+    emissive: 0x10253a,
+    emissiveIntensity: 0.2,
+    roughness: 0.68,
+    flatShading: true
+  });
   const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x5a3d2e, roughness: 0.84 });
   const bladeSailMaterial = new THREE.MeshStandardMaterial({
-    color: 0xcfc6aa,
-    emissive: 0x12130f,
-    emissiveIntensity: 0.08,
+    color: 0xdcd4ba,
+    emissive: 0x1c1c13,
+    emissiveIntensity: 0.12,
     roughness: 0.78,
     flatShading: true
   });
@@ -3320,6 +3333,9 @@ function addWindmill() {
   const coolRim = new THREE.PointLight(0x8fcaff, 0.48, 18, 2.1);
   coolRim.position.set(-4.6, 8.2, 3.8);
   coolRim.castShadow = false;
+  const moonFill = new THREE.PointLight(0xb8d8ff, 0.62, 24, 2.2);
+  moonFill.position.set(-6.4, 11.2, 4.8);
+  moonFill.castShadow = false;
 
   const rotor = new THREE.Group();
   rotor.position.set(0, 11.65, -2.92);
@@ -3344,7 +3360,7 @@ function addWindmill() {
 
   rotor.userData.rotationSpeed = 0.56;
   windmillRotors.push(rotor);
-  group.add(foundation, tower, moonlitSide, lowerBand, upperBand, roof, door, window, windowGlow, coolRim, rotor);
+  group.add(foundation, tower, moonlitSide, lowerBand, upperBand, roof, door, window, windowGlow, coolRim, moonFill, rotor);
   group.rotation.y = rotation;
   group.position.set(x, terrainHeight(x, z) + 0.03, z);
   addLevelObject(group);
@@ -3790,11 +3806,11 @@ function createUfo() {
   const saucer = new THREE.Mesh(
     new THREE.SphereGeometry(2.8, 40, 14),
     new THREE.MeshStandardMaterial({
-      color: 0xa9bbc7,
-      roughness: 0.22,
-      metalness: 0.76,
+      color: 0x9db2c0,
+      roughness: 0.36,
+      metalness: 0.58,
       emissive: 0x071421,
-      emissiveIntensity: 0.08
+      emissiveIntensity: 0.06
     })
   );
   saucer.scale.set(1.65, 0.24, 1.65);
@@ -3803,10 +3819,23 @@ function createUfo() {
 
   const rim = new THREE.Mesh(
     new THREE.TorusGeometry(3.55, 0.26, 10, 52),
-    new THREE.MeshStandardMaterial({ color: 0x5f7484, roughness: 0.28, metalness: 0.82, emissive: 0x03111a, emissiveIntensity: 0.12 })
+    new THREE.MeshStandardMaterial({ color: 0x556b7c, roughness: 0.42, metalness: 0.58, emissive: 0x03111a, emissiveIntensity: 0.08 })
   );
   rim.rotation.x = Math.PI / 2;
   rim.castShadow = true;
+
+  const lowerShadowRim = new THREE.Mesh(
+    new THREE.TorusGeometry(3.64, 0.08, 8, 64),
+    new THREE.MeshStandardMaterial({
+      color: 0x192838,
+      roughness: 0.68,
+      metalness: 0.36,
+      emissive: 0x02070b,
+      emissiveIntensity: 0.08
+    })
+  );
+  lowerShadowRim.rotation.x = Math.PI / 2;
+  lowerShadowRim.position.y = -0.26;
 
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(1.55, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.52),
@@ -3835,52 +3864,149 @@ function createUfo() {
     group.add(lamp);
   }
 
-  const rivetMaterial = new THREE.MeshStandardMaterial({
-    color: 0xd7e0e4,
-    roughness: 0.32,
-    metalness: 0.9,
-    emissive: 0x071018,
-    emissiveIntensity: 0.08
+  const cyanBelt = new THREE.Mesh(
+    new THREE.TorusGeometry(3.66, 0.042, 6, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0x55f7ee,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+  );
+  cyanBelt.rotation.x = Math.PI / 2;
+  cyanBelt.position.y = 0.04;
+
+  const rimWindowMaterial = new THREE.MeshBasicMaterial({
+    color: 0xa8d7dd,
+    transparent: true,
+    opacity: 0.38,
+    depthWrite: false
   });
-  const rivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.072, 8, 6), rivetMaterial, 56);
+  const rimWindows = new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.055, 0.22), rimWindowMaterial, 32);
+  for (let i = 0; i < 32; i += 1) {
+    const angle = (i / 32) * Math.PI * 2;
+    tempObject.position.set(Math.cos(angle) * 3.74, 0.07, Math.sin(angle) * 3.74);
+    tempObject.rotation.set(0, Math.PI / 2 - angle, 0);
+    tempObject.updateMatrix();
+    rimWindows.setMatrixAt(i, tempObject.matrix);
+  }
+
+  const rivetMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe4edf0,
+    roughness: 0.46,
+    metalness: 0.58,
+    emissive: 0x0b1a22,
+    emissiveIntensity: 0.13
+  });
+  const rivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.095, 8, 6), rivetMaterial, 56);
   for (let i = 0; i < 56; i += 1) {
     const angle = (i / 56) * Math.PI * 2;
-    const radius = i % 2 === 0 ? 2.92 : 2.46;
-    tempObject.position.set(Math.cos(angle) * radius, 0.07 + (i % 2) * 0.09, Math.sin(angle) * radius);
-    tempObject.scale.setScalar(i % 2 === 0 ? 1.08 : 0.82);
+    const radius = i % 2 === 0 ? 2.55 : 1.96;
+    tempObject.position.set(Math.cos(angle) * radius, i % 2 === 0 ? 0.3 : 0.39, Math.sin(angle) * radius);
+    tempObject.scale.setScalar(i % 2 === 0 ? 1.08 : 0.86);
     tempObject.updateMatrix();
     rivets.setMatrixAt(i, tempObject.matrix);
   }
   rivets.castShadow = true;
 
-  const panelSeams = new THREE.Group();
-  const seamMaterial = new THREE.MeshStandardMaterial({
-    color: 0x40505d,
-    roughness: 0.38,
-    metalness: 0.84,
-    emissive: 0x02070b,
-    emissiveIntensity: 0.08
-  });
-  for (let i = 0; i < 14; i += 1) {
-    const angle = (i / 14) * Math.PI * 2;
-    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.024, 0.82), seamMaterial);
-    const radius = 2.08;
-    seam.position.set(Math.cos(angle) * radius, 0.185, Math.sin(angle) * radius);
-    seam.rotation.y = -angle;
-    seam.castShadow = true;
-    panelSeams.add(seam);
-  }
-
   const panelRing = new THREE.Mesh(
-    new THREE.TorusGeometry(2.18, 0.025, 6, 64),
-    new THREE.MeshStandardMaterial({
-      color: 0x45525b,
-      roughness: 0.42,
-      metalness: 0.82
+    new THREE.TorusGeometry(2.08, 0.024, 6, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0x4b5d66,
+      transparent: true,
+      opacity: 0.14,
+      depthWrite: false
     })
   );
   panelRing.rotation.x = Math.PI / 2;
-  panelRing.position.y = 0.22;
+  panelRing.position.y = 0.76;
+
+  const topDetailMaterial = new THREE.MeshBasicMaterial({
+    color: 0x6f7e84,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false
+  });
+  const topDetailRing = new THREE.Mesh(new THREE.TorusGeometry(2.78, 0.026, 6, 96), topDetailMaterial);
+  topDetailRing.rotation.x = Math.PI / 2;
+  topDetailRing.position.y = 0.74;
+
+  const topRivetMaterial = new THREE.MeshBasicMaterial({
+    color: 0x9aa8ad,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false
+  });
+  const topRivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 8, 6), topRivetMaterial, 16);
+  for (let i = 0; i < 16; i += 1) {
+    const angle = ((i + 0.5) / 16) * Math.PI * 2;
+    tempObject.position.set(Math.cos(angle) * 3.34, 0.74, Math.sin(angle) * 3.34);
+    tempObject.scale.set(1, 0.45, 1);
+    tempObject.updateMatrix();
+    topRivets.setMatrixAt(i, tempObject.matrix);
+  }
+
+  const canopyGlowRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.64, 0.085, 8, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0x66fff4,
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending
+    })
+  );
+  canopyGlowRing.rotation.x = Math.PI / 2;
+  canopyGlowRing.position.y = 0.68;
+  canopyGlowRing.renderOrder = 6;
+
+  const canopyBaseRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.82, 0.028, 8, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0x1d3644,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false
+    })
+  );
+  canopyBaseRing.rotation.x = Math.PI / 2;
+  canopyBaseRing.position.y = 0.66;
+
+  const rimPanelMaterial = new THREE.MeshStandardMaterial({
+    color: 0x233342,
+    roughness: 0.66,
+    metalness: 0.34,
+    emissive: 0x02080d,
+    emissiveIntensity: 0.1
+  });
+  const rimPanels = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.048, 0.34), rimPanelMaterial, 32);
+  for (let i = 0; i < 32; i += 1) {
+    const angle = (i / 32) * Math.PI * 2;
+    tempObject.position.set(Math.cos(angle) * 3.48, -0.005, Math.sin(angle) * 3.48);
+    tempObject.rotation.set(0, -angle, 0);
+    tempObject.updateMatrix();
+    rimPanels.setMatrixAt(i, tempObject.matrix);
+  }
+  rimPanels.castShadow = true;
+
+  const outerRivetMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1f3443,
+    roughness: 0.62,
+    metalness: 0.46,
+    emissive: 0x02080d,
+    emissiveIntensity: 0.08
+  });
+  const outerRivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 8, 6), outerRivetMaterial, 24);
+  for (let i = 0; i < 24; i += 1) {
+    const angle = ((i + 0.5) / 24) * Math.PI * 2;
+    tempObject.position.set(Math.cos(angle) * 3.5, 0.12, Math.sin(angle) * 3.5);
+    tempObject.scale.set(1, 0.42, 0.8);
+    tempObject.updateMatrix();
+    outerRivets.setMatrixAt(i, tempObject.matrix);
+  }
+  outerRivets.castShadow = true;
 
   const alien = new THREE.Group();
   const alienSkin = new THREE.MeshStandardMaterial({
@@ -3933,7 +4059,26 @@ function createUfo() {
   trail.rotation.x = Math.PI;
   trail.position.y = -1.8;
 
-  group.add(boostGlow, saucer, rim, rivets, panelSeams, panelRing, alien, dome, engineGlow, trail);
+  group.add(
+    boostGlow,
+    saucer,
+    lowerShadowRim,
+    rim,
+    cyanBelt,
+    rimWindows,
+    rivets,
+    panelRing,
+    topDetailRing,
+    topRivets,
+    canopyGlowRing,
+    canopyBaseRing,
+    rimPanels,
+    outerRivets,
+    alien,
+    dome,
+    engineGlow,
+    trail
+  );
   return { group, rim, trail, engineGlow, boostGlow };
 }
 
@@ -4744,18 +4889,18 @@ function spawnHazards() {
 
 function addPatrolZoneMarker(centerX, centerZ, radius, index) {
   const marker = new THREE.Mesh(
-    new THREE.CircleGeometry(2.35, 48),
+    new THREE.RingGeometry(1.8, 2.25, 48),
     new THREE.MeshBasicMaterial({
-      color: 0xdaf8ed,
+      color: 0xe6fff4,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.065,
       depthWrite: false,
       side: THREE.DoubleSide,
       fog: false
     })
   );
   marker.rotation.x = -Math.PI / 2;
-  marker.position.set(centerX, maxTerrainHeightAround(centerX, centerZ, 3) + 0.28, centerZ);
+  marker.position.set(centerX, maxTerrainHeightAround(centerX, centerZ, 3) + 0.3, centerZ);
   marker.name = `patrol-center-marker-${index}`;
   marker.renderOrder = 2;
   addLevelObject(marker);
@@ -5345,8 +5490,8 @@ function updateAudio() {
   const speed = ufoState.velocity.length();
   const engineActive = gameStarted && !gameWon;
   const takeoffActive = gameWon && clock.elapsedTime < takeoffUntil;
-  const engineLevel = engineActive ? 0.006 + speed * 0.0052 : takeoffActive ? 0.085 : 0;
-  const subLevel = engineActive ? 0.002 + speed * 0.0022 : takeoffActive ? 0.035 : 0;
+  const engineLevel = engineActive ? 0.007 + speed * 0.0058 : takeoffActive ? 0.085 : 0;
+  const subLevel = engineActive ? 0.0024 + speed * 0.00245 : takeoffActive ? 0.035 : 0;
   audio.engineOsc.frequency.setTargetAtTime(48 + speed * 4.2, now, 0.1);
   audio.engineSubOsc.frequency.setTargetAtTime(24 + speed * 1.45, now, 0.12);
   audio.engineGain.gain.setTargetAtTime(engineLevel, now, 0.12);
@@ -5646,7 +5791,9 @@ function updateLandscape(elapsed) {
   });
 
   waterSurfaces.forEach((water) => {
-    water.material.emissiveIntensity = 0.22 + Math.sin(elapsed * 1.4 + water.userData.waveOffset) * 0.04;
+    const baseEmissive = water.userData.baseEmissive ?? 0.16;
+    const pulseEmissive = water.userData.pulseEmissive ?? 0.032;
+    water.material.emissiveIntensity = baseEmissive + Math.sin(elapsed * 1.4 + water.userData.waveOffset) * pulseEmissive;
   });
 
   waterRipples.forEach((ripple) => {
