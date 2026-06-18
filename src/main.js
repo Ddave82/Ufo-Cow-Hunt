@@ -76,6 +76,11 @@ const tutorialCopyNode = document.querySelector("#tutorial-copy");
 const playAgainButtonNode = document.querySelector("#play-again-button");
 const chooseLevelButtonNode = document.querySelector("#choose-level-button");
 
+const runtimeInfo = detectItchRuntime();
+const ITCH_COMPAT_MODE = runtimeInfo.enabled;
+const PERF_DEBUG = hasRuntimeFlag("perfDebug");
+const initialRenderSize = getRenderDisplaySize();
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x030713);
 scene.fog = new THREE.FogExp2(0x061226, 0.012);
@@ -85,10 +90,12 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: "high-performance"
 });
-const maxPixelRatio = 1.65;
+const normalMaxPixelRatio = 1.65;
+const itchMaxPixelRatio = 1.5;
+const maxPixelRatio = ITCH_COMPAT_MODE ? itchMaxPixelRatio : normalMaxPixelRatio;
 const initialPixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
 renderer.setPixelRatio(initialPixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.setSize(initialRenderSize.width, initialRenderSize.height, false);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -97,7 +104,7 @@ renderer.toneMappingExposure = 1.12;
 
 const camera = new THREE.PerspectiveCamera(
   58,
-  window.innerWidth / window.innerHeight,
+  initialRenderSize.width / initialRenderSize.height,
   0.1,
   430
 );
@@ -105,20 +112,20 @@ camera.position.set(0, 18, 34);
 
 const composer = new EffectComposer(renderer);
 composer.setPixelRatio(initialPixelRatio);
-composer.setSize(window.innerWidth, window.innerHeight);
+composer.setSize(initialRenderSize.width, initialRenderSize.height);
 const renderPass = new RenderPass(scene, camera);
 const gtaoPass = new GTAOPass(
   scene,
   camera,
-  Math.floor(window.innerWidth * 0.62),
-  Math.floor(window.innerHeight * 0.62),
+  Math.floor(initialRenderSize.width * 0.62),
+  Math.floor(initialRenderSize.height * 0.62),
   undefined,
   { radius: 0.32, distanceExponent: 1.7, thickness: 0.72, distanceFallOff: 0.78, scale: 0.72, samples: 8 }
 );
 gtaoPass.blendIntensity = 0.46;
 gtaoPass.pdSamples = 8;
 const bloomPass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  new THREE.Vector2(initialRenderSize.width, initialRenderSize.height),
   0.28,
   0.36,
   0.82
@@ -129,10 +136,13 @@ composer.addPass(gtaoPass);
 composer.addPass(bloomPass);
 composer.addPass(outputPass);
 
-let lastRenderWidth = window.innerWidth;
-let lastRenderHeight = window.innerHeight;
+let lastRenderWidth = initialRenderSize.width;
+let lastRenderHeight = initialRenderSize.height;
 let lastRenderPixelRatio = initialPixelRatio;
 let resizeScheduled = false;
+let perfDebugNode = null;
+let perfDebugFps = 60;
+let lastPerfDebugUpdate = -Infinity;
 
 const clock = new THREE.Clock();
 const tempObject = new THREE.Object3D();
@@ -581,6 +591,9 @@ applyLevel(selectedLevelId);
 updateMissionCards();
 setUiState(UI_STATES.MAIN_MENU);
 updateHud(true);
+if (PERF_DEBUG) {
+  perfDebugNode = createPerfDebugOverlay();
+}
 
 window.addEventListener("resize", scheduleResize);
 window.addEventListener("pointerdown", initAudio, { once: true });
@@ -5008,6 +5021,7 @@ function tick() {
   updateCamera(delta);
   updateAudio();
   updateHud(false, elapsed);
+  updatePerfDebug(delta, elapsed);
   if (elapsed - lastMinimapDraw >= 1 / 30) {
     lastMinimapDraw = elapsed;
     drawMinimap(elapsed);
@@ -6387,6 +6401,141 @@ function frameLerpAmount(amountAt60Fps, delta) {
   return 1 - Math.pow(1 - amountAt60Fps, delta * 60);
 }
 
+function createPerfDebugOverlay() {
+  const node = document.createElement("div");
+  node.setAttribute("aria-hidden", "true");
+  Object.assign(node.style, {
+    position: "fixed",
+    left: "10px",
+    bottom: "10px",
+    zIndex: "20",
+    maxWidth: "340px",
+    padding: "8px 10px",
+    border: "1px solid rgba(126,255,237,0.36)",
+    borderRadius: "6px",
+    background: "rgba(3, 9, 20, 0.78)",
+    color: "#c8fff8",
+    font: "11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace",
+    pointerEvents: "none",
+    whiteSpace: "pre-wrap"
+  });
+  document.body.appendChild(node);
+  return node;
+}
+
+function updatePerfDebug(delta, elapsed) {
+  if (!perfDebugNode) return;
+  if (delta > 0) {
+    perfDebugFps += (1 / delta - perfDebugFps) * 0.08;
+  }
+  if (elapsed - lastPerfDebugUpdate < 0.25) return;
+  lastPerfDebugUpdate = elapsed;
+
+  const displaySize = getRenderDisplaySize();
+  perfDebugNode.textContent = [
+    `fps ${Math.round(perfDebugFps)}`,
+    `itchCompat ${ITCH_COMPAT_MODE ? "on" : "off"}${runtimeInfo.forced ? " forced" : ""}`,
+    `embedded ${runtimeInfo.embedded ? "yes" : "no"}`,
+    `dpr ${Number(window.devicePixelRatio || 1).toFixed(2)}`,
+    `rendererPR ${renderer.getPixelRatio().toFixed(2)}`,
+    `css ${displaySize.width}x${displaySize.height}`,
+    `buffer ${renderer.domElement.width}x${renderer.domElement.height}`,
+    `ref ${shortRuntimeText(runtimeInfo.referrer)}`,
+    `anc ${shortRuntimeText(runtimeInfo.ancestor)}`
+  ].join("\n");
+}
+
+function shortRuntimeText(text) {
+  if (!text) return "-";
+  return text.length > 82 ? `${text.slice(0, 79)}...` : text;
+}
+
+function detectItchRuntime() {
+  let embedded = false;
+  let referrer = "";
+  let ancestor = "";
+  let host = "";
+  // Local diagnostic override only. Normal builds stay unchanged unless this query flag is present.
+  const forced = hasRuntimeFlag("forceItchCompat");
+
+  try {
+    embedded = window.self !== window.top;
+  } catch {
+    embedded = true;
+  }
+
+  try {
+    referrer = document.referrer || "";
+  } catch {
+    referrer = "";
+  }
+
+  try {
+    host = window.location.hostname || "";
+  } catch {
+    host = "";
+  }
+
+  try {
+    if (window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+      ancestor = Array.from(window.location.ancestorOrigins).join(" ");
+    }
+  } catch {
+    ancestor = "";
+  }
+
+  const combined = `${referrer} ${ancestor} ${host}`.toLowerCase();
+  const fromItch = combined.includes("itch.io") || combined.includes("itch.zone");
+  const hostFromItch = host.toLowerCase().includes("itch.io") || host.toLowerCase().includes("itch.zone");
+
+  return {
+    embedded,
+    forced,
+    fromItch,
+    hostFromItch,
+    host,
+    referrer,
+    ancestor,
+    enabled: forced || hostFromItch || (embedded && fromItch)
+  };
+}
+
+function hasRuntimeFlag(name) {
+  try {
+    return new URLSearchParams(window.location.search).get(name) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function getRenderDisplaySize() {
+  if (ITCH_COMPAT_MODE) {
+    const canvasRect = safeElementRect(canvas);
+    if (canvasRect.width > 0 && canvasRect.height > 0) return canvasRect;
+
+    const parentRect = safeElementRect(canvas?.parentElement);
+    if (parentRect.width > 0 && parentRect.height > 0) return parentRect;
+  }
+
+  return {
+    width: Math.max(1, Math.round(window.innerWidth || 1)),
+    height: Math.max(1, Math.round(window.innerHeight || 1))
+  };
+}
+
+function safeElementRect(element) {
+  try {
+    if (!element) return { width: 0, height: 0 };
+    const rect = element.getBoundingClientRect();
+    return {
+      width: Math.max(0, Math.round(rect.width)),
+      height: Math.max(0, Math.round(rect.height))
+    };
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
+
 function scheduleResize() {
   if (resizeScheduled) return;
   resizeScheduled = true;
@@ -6398,8 +6547,7 @@ function scheduleResize() {
 }
 
 function resizeGame() {
-  const width = Math.max(1, window.innerWidth);
-  const height = Math.max(1, window.innerHeight);
+  const { width, height } = getRenderDisplaySize();
   const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
   const sizeChanged = width !== lastRenderWidth || height !== lastRenderHeight;
   const pixelRatioChanged = pixelRatio !== lastRenderPixelRatio;
