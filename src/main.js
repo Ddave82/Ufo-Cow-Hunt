@@ -79,6 +79,11 @@ const chooseLevelButtonNode = document.querySelector("#choose-level-button");
 const runtimeInfo = detectItchRuntime();
 const ITCH_COMPAT_MODE = runtimeInfo.enabled;
 const PERF_DEBUG = hasRuntimeFlag("perfDebug");
+const normalMaxPixelRatio = 1.65;
+const itchMaxPixelRatio = 1.45;
+const gtaoResolutionScale = ITCH_COMPAT_MODE ? 0.44 : 0.62;
+const gtaoSamples = ITCH_COMPAT_MODE ? 4 : 8;
+const minimapUpdateInterval = ITCH_COMPAT_MODE ? 1 / 20 : 1 / 30;
 const initialRenderSize = getRenderDisplaySize();
 
 const scene = new THREE.Scene();
@@ -90,10 +95,7 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: "high-performance"
 });
-const normalMaxPixelRatio = 1.65;
-const itchMaxPixelRatio = 1.5;
-const maxPixelRatio = ITCH_COMPAT_MODE ? itchMaxPixelRatio : normalMaxPixelRatio;
-const initialPixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+const initialPixelRatio = getTargetPixelRatio(initialRenderSize.width, initialRenderSize.height);
 renderer.setPixelRatio(initialPixelRatio);
 renderer.setSize(initialRenderSize.width, initialRenderSize.height, false);
 renderer.shadowMap.enabled = true;
@@ -117,13 +119,13 @@ const renderPass = new RenderPass(scene, camera);
 const gtaoPass = new GTAOPass(
   scene,
   camera,
-  Math.floor(initialRenderSize.width * 0.62),
-  Math.floor(initialRenderSize.height * 0.62),
+  Math.floor(initialRenderSize.width * gtaoResolutionScale),
+  Math.floor(initialRenderSize.height * gtaoResolutionScale),
   undefined,
-  { radius: 0.32, distanceExponent: 1.7, thickness: 0.72, distanceFallOff: 0.78, scale: 0.72, samples: 8 }
+  { radius: 0.32, distanceExponent: 1.7, thickness: 0.72, distanceFallOff: 0.78, scale: 0.72, samples: gtaoSamples }
 );
 gtaoPass.blendIntensity = 0.46;
-gtaoPass.pdSamples = 8;
+gtaoPass.pdSamples = gtaoSamples;
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(initialRenderSize.width, initialRenderSize.height),
   0.28,
@@ -4993,14 +4995,17 @@ function createPatrolDrone(index) {
 function tick() {
   const rawDelta = clock.getDelta();
   const delta = Math.min(rawDelta, 0.05);
+  const gameplayDelta = Math.min(rawDelta, ITCH_COMPAT_MODE ? 0.085 : 0.05);
+  const beamDelta = Math.min(rawDelta, ITCH_COMPAT_MODE ? 0.11 : 0.05);
+  const simulationDelta = gameStarted && !gameWon && uiState === UI_STATES.PLAYING ? gameplayDelta : delta;
   const elapsed = clock.elapsedTime;
   const gameplayActive = gameStarted && !gameWon && uiState === UI_STATES.PLAYING && !waveTransitionActive;
 
   if (gameplayActive) {
-    updateUfo(delta, elapsed);
-    updateBeam(delta, elapsed);
-    updatePowerups(delta, elapsed, true);
-    updateHazards(delta, elapsed, true);
+    updateUfo(gameplayDelta, elapsed);
+    updateBeam(beamDelta, elapsed);
+    updatePowerups(gameplayDelta, elapsed, true);
+    updateHazards(gameplayDelta, elapsed, true);
     updateWaveTimer(elapsed);
     tutorialManager.event("tick");
   } else {
@@ -5015,14 +5020,14 @@ function tick() {
     ufo.rim.rotation.z += delta * 1.4;
   }
 
-  updateCollectibles(delta, elapsed);
+  updateCollectibles(simulationDelta, elapsed);
   updateCowHint(elapsed);
   updateLandscape(elapsed);
   updateCamera(delta);
   updateAudio();
   updateHud(false, elapsed);
-  updatePerfDebug(delta, elapsed);
-  if (elapsed - lastMinimapDraw >= 1 / 30) {
+  updatePerfDebug(rawDelta, elapsed);
+  if (elapsed - lastMinimapDraw >= minimapUpdateInterval) {
     lastMinimapDraw = elapsed;
     drawMinimap(elapsed);
   }
@@ -5200,14 +5205,15 @@ function updateBeam(delta, elapsed) {
 
   const targetPos = target.position;
   const ufoPos = ufo.group.position;
-  const pullEase = frameLerpAmount(0.058, delta);
+  const pullEase = frameLerpAmount(ITCH_COMPAT_MODE ? 0.082 : 0.058, delta);
   targetPos.x = THREE.MathUtils.lerp(targetPos.x, ufoPos.x, pullEase);
   targetPos.z = THREE.MathUtils.lerp(targetPos.z, ufoPos.z, pullEase);
-  targetPos.y += delta * 6.4;
+  targetPos.y += delta * (ITCH_COMPAT_MODE ? 8.8 : 6.4);
   target.rotation.y += delta * 4.5;
   target.rotation.z = Math.sin(elapsed * 12) * 0.28;
 
-  if (target.position.distanceToSquared(ufo.group.position) < 2.7 * 2.7) {
+  const collectRadius = ITCH_COMPAT_MODE ? 3.2 : 2.7;
+  if (target.position.distanceToSquared(ufo.group.position) < collectRadius * collectRadius) {
     collectTarget(target);
   }
 }
@@ -6437,6 +6443,7 @@ function updatePerfDebug(delta, elapsed) {
     `itchCompat ${ITCH_COMPAT_MODE ? "on" : "off"}${runtimeInfo.forced ? " forced" : ""}`,
     `embedded ${runtimeInfo.embedded ? "yes" : "no"}`,
     `dpr ${Number(window.devicePixelRatio || 1).toFixed(2)}`,
+    `targetPR ${getTargetPixelRatio(displaySize.width, displaySize.height).toFixed(2)}`,
     `rendererPR ${renderer.getPixelRatio().toFixed(2)}`,
     `css ${displaySize.width}x${displaySize.height}`,
     `buffer ${renderer.domElement.width}x${renderer.domElement.height}`,
@@ -6523,6 +6530,23 @@ function getRenderDisplaySize() {
   };
 }
 
+function getTargetPixelRatio(width, height) {
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  if (!ITCH_COMPAT_MODE) return Math.min(devicePixelRatio, normalMaxPixelRatio);
+
+  const displayPixels = width * height;
+  let itchPixelRatioCap = itchMaxPixelRatio;
+  if (displayPixels >= 3200000) {
+    itchPixelRatioCap = 1.18;
+  } else if (displayPixels >= 2000000) {
+    itchPixelRatioCap = 1.25;
+  } else if (displayPixels >= 1400000) {
+    itchPixelRatioCap = 1.35;
+  }
+
+  return Math.min(devicePixelRatio, itchPixelRatioCap);
+}
+
 function safeElementRect(element) {
   try {
     if (!element) return { width: 0, height: 0 };
@@ -6548,7 +6572,7 @@ function scheduleResize() {
 
 function resizeGame() {
   const { width, height } = getRenderDisplaySize();
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+  const pixelRatio = getTargetPixelRatio(width, height);
   const sizeChanged = width !== lastRenderWidth || height !== lastRenderHeight;
   const pixelRatioChanged = pixelRatio !== lastRenderPixelRatio;
 
@@ -6566,7 +6590,7 @@ function resizeGame() {
 
   renderer.setSize(width, height, false);
   composer.setSize(width, height);
-  gtaoPass.setSize(Math.floor(width * 0.62), Math.floor(height * 0.62));
+  gtaoPass.setSize(Math.floor(width * gtaoResolutionScale), Math.floor(height * gtaoResolutionScale));
   bloomPass.setSize(width, height);
 
   lastRenderWidth = width;
