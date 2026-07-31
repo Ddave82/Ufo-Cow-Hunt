@@ -4,6 +4,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import "./styles.css";
 
 const atmoUrl = new URL("../sounds/atmo.mp3", import.meta.url).href;
@@ -100,9 +101,11 @@ renderer.setPixelRatio(initialPixelRatio);
 renderer.setSize(initialRenderSize.width, initialRenderSize.height, false);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = !ITCH_COMPAT_MODE;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
+renderer.info.autoReset = false;
 
 const camera = new THREE.PerspectiveCamera(
   58,
@@ -137,6 +140,7 @@ composer.addPass(renderPass);
 composer.addPass(gtaoPass);
 composer.addPass(bloomPass);
 composer.addPass(outputPass);
+resizeGtaoPass(initialRenderSize.width, initialRenderSize.height);
 
 let lastRenderWidth = initialRenderSize.width;
 let lastRenderHeight = initialRenderSize.height;
@@ -145,6 +149,7 @@ let resizeScheduled = false;
 let perfDebugNode = null;
 let perfDebugFps = 60;
 let lastPerfDebugUpdate = -Infinity;
+let lastShadowUpdate = -Infinity;
 
 const clock = new THREE.Clock();
 const tempObject = new THREE.Object3D();
@@ -939,17 +944,179 @@ function rebuildLevel() {
   terrain = createTerrain();
   addLevelObject(terrain);
   addLandscapeDetails();
+  freezeStaticLevelObjects();
   spawnCollectibles();
   spawnPowerups();
   spawnHazards();
+  lastShadowUpdate = -Infinity;
+  renderer.shadowMap.needsUpdate = true;
 }
 
 function clearLevelObjects() {
-  levelObjects.forEach((object) => {
-    scene.remove(object);
+  const roots = [...levelObjects];
+  const levelRootSet = new Set(roots);
+  const retainedResources = createResourceCollection();
+  scene.children.forEach((object) => {
+    if (!levelRootSet.has(object)) collectObjectResources(object, retainedResources);
   });
+
+  const releasedResources = createResourceCollection();
+  roots.forEach((object) => {
+    scene.remove(object);
+    releaseObjectResources(object, retainedResources, releasedResources);
+  });
+  renderer.renderLists.dispose();
   levelObjects.length = 0;
   terrain = null;
+}
+
+function createResourceCollection() {
+  return {
+    geometries: new Set(),
+    materials: new Set(),
+    textures: new Set(),
+    instances: new Set()
+  };
+}
+
+function collectObjectResources(root, resources) {
+  root.traverse((object) => {
+    if (object.geometry) resources.geometries.add(object.geometry);
+    const materials = Array.isArray(object.material) ? object.material : object.material ? [object.material] : [];
+    materials.forEach((material) => {
+      resources.materials.add(material);
+      collectMaterialTextures(material, resources.textures);
+    });
+    if (object.isInstancedMesh) resources.instances.add(object);
+  });
+}
+
+function collectMaterialTextures(material, textures) {
+  Object.values(material).forEach((value) => {
+    if (value?.isTexture) textures.add(value);
+  });
+  if (!material.uniforms) return;
+  Object.values(material.uniforms).forEach((uniform) => {
+    const value = uniform?.value;
+    if (value?.isTexture) textures.add(value);
+    if (Array.isArray(value)) value.forEach((item) => {
+      if (item?.isTexture) textures.add(item);
+    });
+  });
+}
+
+function releaseObjectResources(root, retained, released) {
+  const resources = createResourceCollection();
+  collectObjectResources(root, resources);
+
+  resources.instances.forEach((object) => {
+    if (retained.instances.has(object) || released.instances.has(object)) return;
+    object.dispose();
+    released.instances.add(object);
+  });
+  resources.textures.forEach((texture) => {
+    if (retained.textures.has(texture) || released.textures.has(texture)) return;
+    texture.dispose();
+    released.textures.add(texture);
+  });
+  resources.materials.forEach((material) => {
+    if (retained.materials.has(material) || released.materials.has(material)) return;
+    material.dispose();
+    released.materials.add(material);
+  });
+  resources.geometries.forEach((geometry) => {
+    if (retained.geometries.has(geometry) || released.geometries.has(geometry)) return;
+    geometry.dispose();
+    released.geometries.add(geometry);
+  });
+}
+
+function freezeStaticLevelObjects() {
+  const movingTransforms = new Set([...windmillRotors, ...waterRipples]);
+  levelObjects.forEach((root) => {
+    batchOpaqueMeshes(root, movingTransforms);
+    freezeObjectTransforms(root, movingTransforms);
+  });
+}
+
+function batchOpaqueMeshes(root, movingTransforms = null) {
+  root.updateMatrixWorld(true);
+  const rootInverse = root.matrixWorld.clone().invert();
+  const batches = new Map();
+
+  root.traverse((object) => {
+    if (
+      object === root ||
+      !object.isMesh ||
+      object.isInstancedMesh ||
+      object.isSkinnedMesh ||
+      !object.visible ||
+      Array.isArray(object.material) ||
+      object.material?.transparent ||
+      hasMovingAncestor(object, root, movingTransforms)
+    ) return;
+
+    const signature = geometryAttributeSignature(object.geometry);
+    const key = [
+      object.material.uuid,
+      signature,
+      object.castShadow ? 1 : 0,
+      object.receiveShadow ? 1 : 0,
+      object.renderOrder,
+      object.layers.mask
+    ].join("|");
+    if (!batches.has(key)) batches.set(key, []);
+    batches.get(key).push(object);
+  });
+
+  batches.forEach((meshes) => {
+    if (meshes.length < 2) return;
+    const transformedGeometries = meshes.map((mesh) => {
+      const geometry = mesh.geometry.clone();
+      geometry.applyMatrix4(tempObject.matrix.multiplyMatrices(rootInverse, mesh.matrixWorld));
+      return geometry;
+    });
+    const mergedGeometry = mergeGeometries(transformedGeometries, false);
+    transformedGeometries.forEach((geometry) => geometry.dispose());
+    if (!mergedGeometry) return;
+
+    const source = meshes[0];
+    meshes.forEach((mesh) => mesh.removeFromParent());
+    const mergedMesh = new THREE.Mesh(mergedGeometry, source.material);
+    mergedMesh.castShadow = source.castShadow;
+    mergedMesh.receiveShadow = source.receiveShadow;
+    mergedMesh.renderOrder = source.renderOrder;
+    mergedMesh.layers.mask = source.layers.mask;
+    mergedMesh.name = `${root.name || "level-group"}-batch`;
+    root.add(mergedMesh);
+  });
+}
+
+function hasMovingAncestor(object, root, movingTransforms) {
+  if (!movingTransforms || movingTransforms.size === 0) return false;
+  let current = object;
+  while (current) {
+    if (movingTransforms.has(current)) return true;
+    if (current === root) break;
+    current = current.parent;
+  }
+  return false;
+}
+
+function geometryAttributeSignature(geometry) {
+  const attributes = Object.entries(geometry.attributes)
+    .map(([name, attribute]) => `${name}:${attribute.itemSize}:${attribute.normalized ? 1 : 0}`)
+    .sort()
+    .join(",");
+  return `${geometry.index ? "indexed" : "plain"}|${attributes}`;
+}
+
+function freezeObjectTransforms(root, movingTransforms = null) {
+  root.traverse((object) => {
+    object.updateMatrix();
+    if (!movingTransforms?.has(object)) object.matrixAutoUpdate = false;
+  });
+  root.updateMatrixWorld(true);
 }
 
 function addLevelObject(...objects) {
@@ -1940,7 +2107,7 @@ function addIceBoundaryBlocks() {
     metalness: 0.04
   });
   const geometry = new THREE.BoxGeometry(4.6, 1.2, 1.5);
-  const group = new THREE.Group();
+  const matrices = [];
   const inset = 4.4;
   const edge = halfWorld - inset;
   const spacing = 7.4;
@@ -1960,17 +2127,15 @@ function addIceBoundaryBlocks() {
       const t = i / count;
       const x = THREE.MathUtils.lerp(x1, x2, t);
       const z = THREE.MathUtils.lerp(z1, z2, t);
-      const block = new THREE.Mesh(geometry, material);
-      block.position.set(x, terrainHeight(x, z) + 0.56, z);
-      block.rotation.y = side.angle + Math.sin((i + sideIndex) * 1.4) * 0.08;
-      block.scale.set(0.86 + (i % 3) * 0.1, 0.7 + (i % 2) * 0.12, 0.8);
-      block.castShadow = true;
-      block.receiveShadow = true;
-      group.add(block);
+      tempObject.position.set(x, terrainHeight(x, z) + 0.56, z);
+      tempObject.rotation.set(0, side.angle + Math.sin((i + sideIndex) * 1.4) * 0.08, 0);
+      tempObject.scale.set(0.86 + (i % 3) * 0.1, 0.7 + (i % 2) * 0.12, 0.8);
+      tempObject.updateMatrix();
+      matrices.push(tempObject.matrix.clone());
     }
   });
 
-  addLevelObject(group);
+  addLevelObject(createStaticInstancedMesh(geometry, material, matrices, true, true));
 }
 
 function addIceDetails() {
@@ -2529,7 +2694,8 @@ function addDesertBoundaryBlocks() {
   });
   const blockGeometry = new THREE.BoxGeometry(4.8, 1.0, 1.45);
   const capGeometry = new THREE.BoxGeometry(3.2, 1.25, 1.6);
-  const group = new THREE.Group();
+  const blockMatrices = [];
+  const capMatrices = [];
   const inset = 4.5;
   const fenceHalf = halfWorld - inset;
   const spacing = 7.2;
@@ -2550,17 +2716,29 @@ function addDesertBoundaryBlocks() {
       const x = THREE.MathUtils.lerp(x1, x2, t);
       const z = THREE.MathUtils.lerp(z1, z2, t);
       const isCap = i % 5 === 0;
-      const block = new THREE.Mesh(isCap ? capGeometry : blockGeometry, isCap ? capMaterial : blockMaterial);
-      block.position.set(x, terrainHeight(x, z) + (isCap ? 0.62 : 0.5), z);
-      block.rotation.y = side.angle + Math.sin((i + sideIndex) * 1.7) * 0.05;
-      block.scale.set(0.9 + ((i + sideIndex) % 3) * 0.08, 0.78 + (i % 2) * 0.16, 0.86);
-      block.castShadow = true;
-      block.receiveShadow = true;
-      group.add(block);
+      tempObject.position.set(x, terrainHeight(x, z) + (isCap ? 0.62 : 0.5), z);
+      tempObject.rotation.set(0, side.angle + Math.sin((i + sideIndex) * 1.7) * 0.05, 0);
+      tempObject.scale.set(0.9 + ((i + sideIndex) % 3) * 0.08, 0.78 + (i % 2) * 0.16, 0.86);
+      tempObject.updateMatrix();
+      (isCap ? capMatrices : blockMatrices).push(tempObject.matrix.clone());
     }
   });
 
-  addLevelObject(group);
+  addLevelObject(
+    createStaticInstancedMesh(blockGeometry, blockMaterial, blockMatrices, true, true),
+    createStaticInstancedMesh(capGeometry, capMaterial, capMatrices, true, true)
+  );
+}
+
+function createStaticInstancedMesh(geometry, material, matrices, castShadow = false, receiveShadow = false) {
+  if (matrices.length === 0) return null;
+  const mesh = new THREE.InstancedMesh(geometry, material, matrices.length);
+  matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix));
+  mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.castShadow = castShadow;
+  mesh.receiveShadow = receiveShadow;
+  return mesh;
 }
 
 function addPyramid() {
@@ -3131,8 +3309,6 @@ function addBoundaryFence() {
     roughness: 0.88,
     metalness: 0.02
   });
-  const group = new THREE.Group();
-
   const north = [];
   const south = [];
   const west = [];
@@ -3145,25 +3321,36 @@ function addBoundaryFence() {
     east.push([fenceHalf, t]);
   }
 
-  [north, south, west, east].forEach((points) => {
-    addFenceLine(group, points, postGeometry, railGeometry, woodMaterial, {
-      postHeight: 1.35,
-      railHeights: [0.72, 1.08],
-      skipWater: false
-    });
-  });
-
-  addLevelObject(group);
+  addLevelObject(createFenceGroup(
+    [north, south, west, east],
+    postGeometry,
+    railGeometry,
+    woodMaterial,
+    { postHeight: 1.35, railHeights: [0.72, 1.08], skipWater: false }
+  ));
 }
 
-function addFenceLine(group, points, postGeometry, railGeometry, material, options) {
+function createFenceGroup(lines, postGeometry, railGeometry, material, options) {
+  const postMatrices = [];
+  const railMatrices = [];
+  lines.forEach((points) => collectFenceLineMatrices(points, options, postMatrices, railMatrices));
+
+  const group = new THREE.Group();
+  const posts = createStaticInstancedMesh(postGeometry, material, postMatrices, true, true);
+  const rails = createStaticInstancedMesh(railGeometry, material, railMatrices, true, true);
+  if (posts) group.add(posts);
+  if (rails) group.add(rails);
+  return group;
+}
+
+function collectFenceLineMatrices(points, options, postMatrices, railMatrices) {
   points.forEach(([x, z]) => {
     if (options.skipWater && !isDryObjectSpot(x, z, 2.8)) return;
-    const post = new THREE.Mesh(postGeometry, material);
-    post.position.set(x, terrainHeight(x, z) + options.postHeight * 0.5, z);
-    post.castShadow = true;
-    post.receiveShadow = true;
-    group.add(post);
+    tempObject.position.set(x, terrainHeight(x, z) + options.postHeight * 0.5, z);
+    tempObject.rotation.set(0, 0, 0);
+    tempObject.scale.set(1, 1, 1);
+    tempObject.updateMatrix();
+    postMatrices.push(tempObject.matrix.clone());
   });
 
   for (let i = 0; i < points.length - 1; i += 1) {
@@ -3174,25 +3361,23 @@ function addFenceLine(group, points, postGeometry, railGeometry, material, optio
     if (options.skipWater && !isDryObjectSpot(midX, midZ, 4.2)) continue;
 
     options.railHeights.forEach((heightOffset) => {
-      addFenceRail(group, railGeometry, material, x1, z1, x2, z2, heightOffset);
+      collectFenceRailMatrix(x1, z1, x2, z2, heightOffset, railMatrices);
     });
   }
 }
 
-function addFenceRail(group, railGeometry, material, x1, z1, x2, z2, heightOffset) {
+function collectFenceRailMatrix(x1, z1, x2, z2, heightOffset, railMatrices) {
   const start = new THREE.Vector3(x1, terrainHeight(x1, z1) + heightOffset, z1);
   const end = new THREE.Vector3(x2, terrainHeight(x2, z2) + heightOffset, z2);
   const direction = end.clone().sub(start);
   const length = direction.length();
   if (length < 0.1) return;
 
-  const rail = new THREE.Mesh(railGeometry, material);
-  rail.position.copy(start).addScaledVector(direction, 0.5);
-  rail.scale.set(length * 0.88, 1, 1);
-  rail.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), direction.normalize());
-  rail.castShadow = true;
-  rail.receiveShadow = true;
-  group.add(rail);
+  tempObject.position.copy(start).addScaledVector(direction, 0.5);
+  tempObject.scale.set(length * 0.88, 1, 1);
+  tempObject.quaternion.setFromUnitVectors(tempVector.set(1, 0, 0), direction.normalize());
+  tempObject.updateMatrix();
+  railMatrices.push(tempObject.matrix.clone());
 }
 
 function addFarmDetails() {
@@ -3414,8 +3599,6 @@ function addRectFence(centerX, centerZ, width, depth, spacing) {
   const halfDepth = depth * 0.5;
   const xSegments = Math.max(3, Math.round(width / spacing));
   const zSegments = Math.max(3, Math.round(depth / spacing));
-  const group = new THREE.Group();
-
   const north = [];
   const south = [];
   const west = [];
@@ -3433,15 +3616,13 @@ function addRectFence(centerX, centerZ, width, depth, spacing) {
     east.push([centerX + halfWidth, z]);
   }
 
-  [north, south, west, east].forEach((points) => {
-    addFenceLine(group, points, postGeometry, railGeometry, material, {
-      postHeight: 1.18,
-      railHeights: [0.56, 0.9],
-      skipWater: false
-    });
-  });
-
-  addLevelObject(group);
+  addLevelObject(createFenceGroup(
+    [north, south, west, east],
+    postGeometry,
+    railGeometry,
+    material,
+    { postHeight: 1.18, railHeights: [0.56, 0.9], skipWater: false }
+  ));
 }
 
 function addBarn(x, z, rotationY = 0) {
@@ -3526,6 +3707,7 @@ function addHayBales() {
     roughness: 0.92
   });
   const geometry = new THREE.CylinderGeometry(0.72, 0.72, 1.2, 12);
+  const matrices = [];
 
   [
     [40, 42, 0.1],
@@ -3546,14 +3728,14 @@ function addHayBales() {
     [69, 24, 0.52]
   ].forEach(([x, z, rotation], index) => {
     const spot = findDryObjectSpot(x, z, 3.6, 270 + index);
-    const bale = new THREE.Mesh(geometry, material);
-    bale.rotation.z = Math.PI / 2;
-    bale.rotation.y = rotation;
-    bale.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.72, spot.z);
-    bale.castShadow = true;
-    bale.receiveShadow = true;
-    addLevelObject(bale);
+    tempObject.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.72, spot.z);
+    tempObject.rotation.set(0, rotation, Math.PI / 2);
+    tempObject.scale.set(1, 1, 1);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
   });
+
+  addLevelObject(createStaticInstancedMesh(geometry, material, matrices, true, true));
 }
 
 function addPathStones() {
@@ -3563,6 +3745,7 @@ function addPathStones() {
     roughness: 0.96
   });
   const points = [];
+  const matrices = [];
   for (let segment = 0; segment < farmPathPoints.length - 1; segment += 1) {
     const [x1, z1] = farmPathPoints[segment];
     const [x2, z2] = farmPathPoints[segment + 1];
@@ -3581,13 +3764,14 @@ function addPathStones() {
   points.forEach(([x, z], index) => {
     if (index % 3 === 0) return;
     if (!isDryObjectSpot(x, z, 2.4)) return;
-    const stone = new THREE.Mesh(geometry, material);
-    stone.position.set(x, terrainHeight(x, z) + 0.12, z);
-    stone.scale.set(0.6 + (index % 4) * 0.1, 0.16, 0.42 + (index % 3) * 0.08);
-    stone.rotation.set(index * 0.13, index * 0.41, index * 0.07);
-    stone.receiveShadow = true;
-    addLevelObject(stone);
+    tempObject.position.set(x, terrainHeight(x, z) + 0.12, z);
+    tempObject.scale.set(0.6 + (index % 4) * 0.1, 0.16, 0.42 + (index % 3) * 0.08);
+    tempObject.rotation.set(index * 0.13, index * 0.41, index * 0.07);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
   });
+
+  addLevelObject(createStaticInstancedMesh(geometry, material, matrices, false, true));
 }
 
 function addGrassClumps() {
@@ -4383,9 +4567,13 @@ function collectibleBaseHeight(type, x, z) {
 }
 
 function createAnimal(index) {
-  if (activeLevelId === "desert") return createCamel(index);
-  if (activeLevelId === "ice") return createPolarBear(index);
-  return createCow(index);
+  const animal = activeLevelId === "desert"
+    ? createCamel(index)
+    : activeLevelId === "ice"
+      ? createPolarBear(index)
+      : createCow(index);
+  batchOpaqueMeshes(animal);
+  return animal;
 }
 
 function createCow(index) {
@@ -4514,9 +4702,13 @@ function createCamel(index) {
 }
 
 function createHumanForLevel() {
-  if (activeLevelId === "desert") return createDesertHuman();
-  if (activeLevelId === "ice") return createIceHuman();
-  return createBonusHuman();
+  const human = activeLevelId === "desert"
+    ? createDesertHuman()
+    : activeLevelId === "ice"
+      ? createIceHuman()
+      : createBonusHuman();
+  batchOpaqueMeshes(human);
+  return human;
 }
 
 function createBonusHuman() {
@@ -4928,6 +5120,7 @@ function addPatrolZoneMarker(centerX, centerZ, radius, index) {
   marker.position.set(centerX, maxTerrainHeightAround(centerX, centerZ, 3) + 0.3, centerZ);
   marker.name = `patrol-center-marker-${index}`;
   marker.renderOrder = 2;
+  freezeObjectTransforms(marker);
   addLevelObject(marker);
 }
 
@@ -5032,7 +5225,16 @@ function tick() {
     drawMinimap(elapsed);
   }
 
+  updateShadowMap(elapsed);
+  renderer.info.reset();
   composer.render();
+}
+
+function updateShadowMap(elapsed) {
+  if (!ITCH_COMPAT_MODE) return;
+  if (elapsed - lastShadowUpdate < 1 / 30) return;
+  lastShadowUpdate = elapsed;
+  renderer.shadowMap.needsUpdate = true;
 }
 
 function updateUfo(delta, elapsed) {
@@ -6447,6 +6649,9 @@ function updatePerfDebug(delta, elapsed) {
     `rendererPR ${renderer.getPixelRatio().toFixed(2)}`,
     `css ${displaySize.width}x${displaySize.height}`,
     `buffer ${renderer.domElement.width}x${renderer.domElement.height}`,
+    `ao ${gtaoPass.width}x${gtaoPass.height}`,
+    `draws ${renderer.info.render.calls} tris ${renderer.info.render.triangles}`,
+    `geo ${renderer.info.memory.geometries} tex ${renderer.info.memory.textures}`,
     `ref ${shortRuntimeText(runtimeInfo.referrer)}`,
     `anc ${shortRuntimeText(runtimeInfo.ancestor)}`
   ].join("\n");
@@ -6590,10 +6795,17 @@ function resizeGame() {
 
   renderer.setSize(width, height, false);
   composer.setSize(width, height);
-  gtaoPass.setSize(Math.floor(width * gtaoResolutionScale), Math.floor(height * gtaoResolutionScale));
+  resizeGtaoPass(width, height);
   bloomPass.setSize(width, height);
 
   lastRenderWidth = width;
   lastRenderHeight = height;
   lastRenderPixelRatio = pixelRatio;
+}
+
+function resizeGtaoPass(width, height) {
+  gtaoPass.setSize(
+    Math.max(1, Math.floor(width * gtaoResolutionScale)),
+    Math.max(1, Math.floor(height * gtaoResolutionScale))
+  );
 }
