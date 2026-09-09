@@ -24,10 +24,10 @@
     </div>
     <div id="radar" class="panel" aria-label="Minimap">
       <canvas id="minimap" width="156" height="156"></canvas>
-      <div class="radar-label">Radar</div>
+      <div class="radar-label"><i></i> Live radar <span>SCAN / 360°</span></div>
     </div>
     <div id="energy" class="panel">
-      <span>Beam Energy</span>
+      <span>Tractor beam <b class="energy-shortcut">SPACE</b></span>
       <div class="meter"><i id="energy-fill"></i></div>
       <small id="energy-label">100%</small>
     </div>
@@ -36,15 +36,16 @@
       <span>Fly with W/A/S/D or arrows. Hold Space to beam targets aboard.</span>
     </div>
     <div id="main-menu" class="menu-panel panel" aria-live="polite">
-      <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />
-      <div class="menu-kicker">Night abduction arcade</div>
-      <strong>UFO Cow Hunt</strong>
+      <div class="brand-line"><img src="./assets/logo.png" alt="" /><span>DEEP SPACE FIELD DIVISION</span></div>
+      <div class="menu-kicker">Earth expedition / 007</div>
+      <h1>UFO<br /><span>COW HUNT</span></h1>
+      <p class="hero-copy">Quiet skies. Questionable intentions.<br />Your next close encounter starts here.</p>
       <div class="main-menu-actions">
-        <button id="play-button" class="primary-button" type="button">Play</button>
-        <button id="select-mission-button" class="primary-button secondary" type="button">Select Mission</button>
-        <button id="main-settings-button" class="primary-button secondary" type="button">Settings</button>
+        <button id="play-button" class="primary-button" type="button"><span>Launch mission</span><span aria-hidden="true">↗</span></button>
+        <button id="select-mission-button" class="primary-button secondary" type="button"><span>Select mission</span><span aria-hidden="true">03 zones</span></button>
+        <button id="main-settings-button" class="primary-button secondary" type="button"><span>Settings</span><span aria-hidden="true">⌘</span></button>
       </div>
-      <small class="menu-footer">Keyboard recommended · ESC to pause</small>
+      <small class="menu-footer"><i></i> All systems ready <span>WASD · SPACE · SHIFT</span></small>
     </div>
     <div id="level-screen" class="menu-panel panel hidden" aria-live="polite">
       <img class="game-logo" src="./assets/logo.png" alt="UFO Cow Hunt logo" />

@@ -42,7 +42,7 @@ Drone pressure can be changed in the settings menu:
 - Farm Night with fields, improved ponds, trees, fences, hay bales, a windmill, a silo, cows, and a rare bonus human
 - Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
 - Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, and a polar explorer bonus human
-- Detailed UFO with metal rivets, glass dome, cyan glow rings, and a tiny alien inside
+- Scout-07 UFO with a ceramic hull, copper trim, segmented engine lights, a reflective glass canopy, and a visible alien pilot
 - Light beam for abducting level animals and bonus targets
 - Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
 - Wave-specific animal behavior: boost scares animals from Wave 2 onward, and targets wander slowly in Wave 3
@@ -129,6 +129,12 @@ Music and effects are stored locally in the `sounds/` folder and bundled as asse
 - [Three.js](https://threejs.org/) for 3D rendering
 - [Vite](https://vite.dev/) for the dev server and build pipeline
 - Web Audio API and HTML Audio for synth sounds and MP3 playback
+
+## Visual refresh and rollback
+
+The September 2026 visual refresh is developed on `codex/visual-refresh`. The previous working state, including its lockfile change, is preserved on `backup/pre-visual-refresh-2026-09-09` (`d2dad14`). See [the visual refresh notes](docs/GRAFIK-UPDATE.md) for rollback commands, model budgets, and validation.
+
+Run `node scripts/check-ufo-budget.mjs` to compare the model costs with the backup. Add `?perfDebug=1` to the local game URL for rendering counters and frame-time percentiles.
 
 ## Status
 

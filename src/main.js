@@ -4,8 +4,10 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import "./styles.css";
+import { createUfo } from "./models/ufo.js";
 
 const atmoUrl = new URL("../sounds/atmo.mp3", import.meta.url).href;
 const musicUrls = [
@@ -148,6 +150,8 @@ let lastRenderPixelRatio = initialPixelRatio;
 let resizeScheduled = false;
 let perfDebugNode = null;
 let perfDebugFps = 60;
+const perfFrameTimes = [];
+let perfFrameCursor = 0;
 let lastPerfDebugUpdate = -Infinity;
 let lastShadowUpdate = -Infinity;
 
@@ -322,23 +326,23 @@ const maxWaveCows = Math.max(...waveConfigs.map((wave) => wave.cowGoal));
 const visualPresets = {
   farm: {
     background: 0x02091b,
-    fog: 0x071a30,
+    fog: 0x102b33,
     fogDensity: 0.016,
     exposure: 1.08,
-    moonColor: 0xa9d4ff,
-    moonIntensity: 2.9,
+    moonColor: 0xb8d8f0,
+    moonIntensity: 2.65,
     moonPosition: [-44, 76, -54],
-    hemiSky: 0x608ed2,
+    hemiSky: 0x779ba9,
     hemiGround: 0x071a11,
-    hemiIntensity: 1.34,
-    bloomStrength: 0.34,
+    hemiIntensity: 1.4,
+    bloomStrength: 0.25,
     bloomRadius: 0.36,
     bloomThreshold: 0.8,
     aoIntensity: 0.5,
     beamColor: 0x55ffe8,
     beamCore: 0xb8fff8,
     skyTop: 0x010615,
-    skyHorizon: 0x071c33,
+    skyHorizon: 0x10343b,
     starColor: 0xdcf6ff,
     starOpacity: 0.68,
     moonGlow: 0x6fb8ff,
@@ -362,7 +366,7 @@ const visualPresets = {
     beamColor: 0x5dffe9,
     beamCore: 0xbffff8,
     skyTop: 0x08030d,
-    skyHorizon: 0x2c1321,
+    skyHorizon: 0x482c3b,
     starColor: 0xffe6c6,
     starOpacity: 0.62,
     moonGlow: 0xff9f7a,
@@ -386,7 +390,7 @@ const visualPresets = {
     beamColor: 0x62fff4,
     beamCore: 0xd4fffb,
     skyTop: 0x010817,
-    skyHorizon: 0x07304a,
+    skyHorizon: 0x164451,
     starColor: 0xe8fbff,
     starOpacity: 0.7,
     moonGlow: 0x92eaff,
@@ -1497,8 +1501,8 @@ function createTerrain() {
         dryLand * 0.028 +
         detail * 0.64;
 
-      color.setHSL(0.26 + Math.sin(x * 0.04) * 0.02, 0.62, meadow);
-      if (pasture > 0.25) color.setHSL(0.3, 0.56, 0.19 + pasture * 0.045 + detail * 0.18);
+      color.setHSL(0.34 + Math.sin(x * 0.04) * 0.018, 0.4, meadow);
+      if (pasture > 0.25) color.setHSL(0.31, 0.38, 0.19 + pasture * 0.045 + detail * 0.18);
       if (path > 0.24) color.setHSL(0.095, 0.42, 0.19 + path * 0.055 + detail * 0.18);
       if (shore > 0.08) color.setHSL(0.13, 0.34, 0.17 + shore * 0.058);
       if (ridge > 0.42) color.setHSL(0.17, 0.42, 0.18 + ridge * 0.085 + detail * 0.18);
@@ -2272,7 +2276,7 @@ function createPolarBear(index) {
   shadow.position.set(0.32, 0.035, 0);
   shadow.scale.set(1.35, 0.58, 1);
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.72, 0.78), fur);
+  const body = new THREE.Mesh(animalBodyGeometry(2.25, 0.72, 0.78), fur);
   body.position.y = 0.88;
   body.castShadow = true;
   body.receiveShadow = true;
@@ -2281,7 +2285,7 @@ function createPolarBear(index) {
   shoulder.position.set(0.62, 1.0, 0);
   shoulder.castShadow = true;
 
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.48, 0.5), fur);
+  const head = new THREE.Mesh(animalBodyGeometry(0.62, 0.48, 0.5), fur);
   head.position.set(1.46, 1.1, 0);
   head.castShadow = true;
 
@@ -4008,289 +4012,6 @@ function addFireflies() {
   addLevelObject(fireflies);
 }
 
-function createUfo() {
-  const group = new THREE.Group();
-  group.position.set(0, 12, 18);
-
-  const saucer = new THREE.Mesh(
-    new THREE.SphereGeometry(2.8, 40, 14),
-    new THREE.MeshStandardMaterial({
-      color: 0x9db2c0,
-      roughness: 0.36,
-      metalness: 0.58,
-      emissive: 0x071421,
-      emissiveIntensity: 0.06
-    })
-  );
-  saucer.scale.set(1.65, 0.24, 1.65);
-  saucer.castShadow = true;
-  saucer.receiveShadow = true;
-
-  const rim = new THREE.Mesh(
-    new THREE.TorusGeometry(3.55, 0.26, 10, 52),
-    new THREE.MeshStandardMaterial({ color: 0x556b7c, roughness: 0.42, metalness: 0.58, emissive: 0x03111a, emissiveIntensity: 0.08 })
-  );
-  rim.rotation.x = Math.PI / 2;
-  rim.castShadow = true;
-
-  const lowerShadowRim = new THREE.Mesh(
-    new THREE.TorusGeometry(3.64, 0.08, 8, 64),
-    new THREE.MeshStandardMaterial({
-      color: 0x192838,
-      roughness: 0.68,
-      metalness: 0.36,
-      emissive: 0x02070b,
-      emissiveIntensity: 0.08
-    })
-  );
-  lowerShadowRim.rotation.x = Math.PI / 2;
-  lowerShadowRim.position.y = -0.26;
-
-  const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(1.55, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.52),
-    new THREE.MeshStandardMaterial({
-      color: 0x8df6ff,
-      emissive: 0x1aa8c8,
-      emissiveIntensity: 0.55,
-      roughness: 0.08,
-      metalness: 0.05,
-      transparent: true,
-      opacity: 0.76
-    })
-  );
-  dome.position.y = 0.36;
-  dome.castShadow = true;
-
-  const lampMaterial = new THREE.MeshStandardMaterial({
-    color: 0xa9fff5,
-    emissive: 0x35ffe5,
-    emissiveIntensity: 2.35
-  });
-  for (let i = 0; i < 12; i += 1) {
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), lampMaterial);
-    const angle = (i / 12) * Math.PI * 2;
-    lamp.position.set(Math.cos(angle) * 3.36, -0.1, Math.sin(angle) * 3.36);
-    group.add(lamp);
-  }
-
-  const cyanBelt = new THREE.Mesh(
-    new THREE.TorusGeometry(3.66, 0.042, 6, 96),
-    new THREE.MeshBasicMaterial({
-      color: 0x55f7ee,
-      transparent: true,
-      opacity: 0.42,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  cyanBelt.rotation.x = Math.PI / 2;
-  cyanBelt.position.y = 0.04;
-
-  const rimWindowMaterial = new THREE.MeshBasicMaterial({
-    color: 0xa8d7dd,
-    transparent: true,
-    opacity: 0.38,
-    depthWrite: false
-  });
-  const rimWindows = new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.055, 0.22), rimWindowMaterial, 32);
-  for (let i = 0; i < 32; i += 1) {
-    const angle = (i / 32) * Math.PI * 2;
-    tempObject.position.set(Math.cos(angle) * 3.74, 0.07, Math.sin(angle) * 3.74);
-    tempObject.rotation.set(0, Math.PI / 2 - angle, 0);
-    tempObject.updateMatrix();
-    rimWindows.setMatrixAt(i, tempObject.matrix);
-  }
-
-  const rivetMaterial = new THREE.MeshStandardMaterial({
-    color: 0xe4edf0,
-    roughness: 0.46,
-    metalness: 0.58,
-    emissive: 0x0b1a22,
-    emissiveIntensity: 0.13
-  });
-  const rivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.095, 8, 6), rivetMaterial, 56);
-  for (let i = 0; i < 56; i += 1) {
-    const angle = (i / 56) * Math.PI * 2;
-    const radius = i % 2 === 0 ? 2.55 : 1.96;
-    tempObject.position.set(Math.cos(angle) * radius, i % 2 === 0 ? 0.3 : 0.39, Math.sin(angle) * radius);
-    tempObject.scale.setScalar(i % 2 === 0 ? 1.08 : 0.86);
-    tempObject.updateMatrix();
-    rivets.setMatrixAt(i, tempObject.matrix);
-  }
-  rivets.castShadow = true;
-
-  const panelRing = new THREE.Mesh(
-    new THREE.TorusGeometry(2.08, 0.024, 6, 96),
-    new THREE.MeshBasicMaterial({
-      color: 0x4b5d66,
-      transparent: true,
-      opacity: 0.14,
-      depthWrite: false
-    })
-  );
-  panelRing.rotation.x = Math.PI / 2;
-  panelRing.position.y = 0.76;
-
-  const topDetailMaterial = new THREE.MeshBasicMaterial({
-    color: 0x6f7e84,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false
-  });
-  const topDetailRing = new THREE.Mesh(new THREE.TorusGeometry(2.78, 0.026, 6, 96), topDetailMaterial);
-  topDetailRing.rotation.x = Math.PI / 2;
-  topDetailRing.position.y = 0.74;
-
-  const topRivetMaterial = new THREE.MeshBasicMaterial({
-    color: 0x9aa8ad,
-    transparent: true,
-    opacity: 0.18,
-    depthWrite: false
-  });
-  const topRivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 8, 6), topRivetMaterial, 16);
-  for (let i = 0; i < 16; i += 1) {
-    const angle = ((i + 0.5) / 16) * Math.PI * 2;
-    tempObject.position.set(Math.cos(angle) * 3.34, 0.74, Math.sin(angle) * 3.34);
-    tempObject.scale.set(1, 0.45, 1);
-    tempObject.updateMatrix();
-    topRivets.setMatrixAt(i, tempObject.matrix);
-  }
-
-  const canopyGlowRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.64, 0.085, 8, 96),
-    new THREE.MeshBasicMaterial({
-      color: 0x66fff4,
-      transparent: true,
-      opacity: 0.92,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  canopyGlowRing.rotation.x = Math.PI / 2;
-  canopyGlowRing.position.y = 0.68;
-  canopyGlowRing.renderOrder = 6;
-
-  const canopyBaseRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.82, 0.028, 8, 96),
-    new THREE.MeshBasicMaterial({
-      color: 0x1d3644,
-      transparent: true,
-      opacity: 0.34,
-      depthWrite: false
-    })
-  );
-  canopyBaseRing.rotation.x = Math.PI / 2;
-  canopyBaseRing.position.y = 0.66;
-
-  const rimPanelMaterial = new THREE.MeshStandardMaterial({
-    color: 0x233342,
-    roughness: 0.66,
-    metalness: 0.34,
-    emissive: 0x02080d,
-    emissiveIntensity: 0.1
-  });
-  const rimPanels = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.048, 0.34), rimPanelMaterial, 32);
-  for (let i = 0; i < 32; i += 1) {
-    const angle = (i / 32) * Math.PI * 2;
-    tempObject.position.set(Math.cos(angle) * 3.48, -0.005, Math.sin(angle) * 3.48);
-    tempObject.rotation.set(0, -angle, 0);
-    tempObject.updateMatrix();
-    rimPanels.setMatrixAt(i, tempObject.matrix);
-  }
-  rimPanels.castShadow = true;
-
-  const outerRivetMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1f3443,
-    roughness: 0.62,
-    metalness: 0.46,
-    emissive: 0x02080d,
-    emissiveIntensity: 0.08
-  });
-  const outerRivets = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 8, 6), outerRivetMaterial, 24);
-  for (let i = 0; i < 24; i += 1) {
-    const angle = ((i + 0.5) / 24) * Math.PI * 2;
-    tempObject.position.set(Math.cos(angle) * 3.5, 0.12, Math.sin(angle) * 3.5);
-    tempObject.scale.set(1, 0.42, 0.8);
-    tempObject.updateMatrix();
-    outerRivets.setMatrixAt(i, tempObject.matrix);
-  }
-  outerRivets.castShadow = true;
-
-  const alien = new THREE.Group();
-  const alienSkin = new THREE.MeshStandardMaterial({
-    color: 0x8de08f,
-    emissive: 0x1b5f3a,
-    emissiveIntensity: 0.22,
-    roughness: 0.7
-  });
-  const alienHead = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12), alienSkin);
-  alienHead.scale.set(0.78, 1.08, 0.72);
-  alienHead.position.y = 0.74;
-  const alienBody = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.38, 4, 10), alienSkin);
-  alienBody.position.y = 0.26;
-  const alienEyeMaterial = new THREE.MeshBasicMaterial({ color: 0x061315 });
-  for (const x of [-0.13, 0.13]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), alienEyeMaterial);
-    eye.position.set(x, 0.8, 0.3);
-    eye.scale.set(1.15, 1.55, 0.6);
-    alien.add(eye);
-  }
-  alien.add(alienHead, alienBody);
-  alien.position.set(0, 0.18, -0.12);
-
-  const engineGlow = new THREE.PointLight(0x72fff0, 7.5, 28);
-  engineGlow.position.y = -0.35;
-
-  const boostGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(3.15, 36, 14),
-    new THREE.MeshBasicMaterial({
-      color: 0x8ffff1,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending
-    })
-  );
-  boostGlow.scale.set(1.55, 0.18, 1.55);
-  boostGlow.position.y = -0.02;
-
-  const trail = new THREE.Mesh(
-    new THREE.ConeGeometry(0.5, 3.2, 18, 1, true),
-    new THREE.MeshBasicMaterial({
-      color: 0x86fff0,
-      transparent: true,
-      opacity: 0.22,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    })
-  );
-  trail.rotation.x = Math.PI;
-  trail.position.y = -1.8;
-
-  group.add(
-    boostGlow,
-    saucer,
-    lowerShadowRim,
-    rim,
-    cyanBelt,
-    rimWindows,
-    rivets,
-    panelRing,
-    topDetailRing,
-    topRivets,
-    canopyGlowRing,
-    canopyBaseRing,
-    rimPanels,
-    outerRivets,
-    alien,
-    dome,
-    engineGlow,
-    trail
-  );
-  return { group, rim, trail, engineGlow, boostGlow };
-}
-
 function createBeam() {
   const group = new THREE.Group();
   group.visible = false;
@@ -4566,6 +4287,14 @@ function collectibleBaseHeight(type, x, z) {
   return terrainHeight(x, z);
 }
 
+function animalBodyGeometry(width, height, depth) {
+  const beveled = new RoundedBoxGeometry(width, height, depth, 1, 0.1);
+  // Indexed geometry keeps bevelled bodies in the existing material batches.
+  const geometry = mergeVertices(beveled);
+  beveled.dispose();
+  return geometry;
+}
+
 function createAnimal(index) {
   const animal = activeLevelId === "desert"
     ? createCamel(index)
@@ -4586,11 +4315,11 @@ function createCow(index) {
   const black = new THREE.MeshStandardMaterial({ color: 0x171a1a, roughness: 0.78 });
   const pink = new THREE.MeshStandardMaterial({ color: 0xd98791, roughness: 0.65 });
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.85, 0.72), white);
+  const body = new THREE.Mesh(animalBodyGeometry(1.8, 0.85, 0.72), white);
   body.position.y = 0.92;
   body.castShadow = true;
 
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.58, 0.58), white);
+  const head = new THREE.Mesh(animalBodyGeometry(0.65, 0.58, 0.58), white);
   head.position.set(1.12, 1.08, 0);
   head.castShadow = true;
 
@@ -4639,7 +4368,18 @@ function createCow(index) {
     group.add(horn);
   }
 
-  group.add(body, head, snout);
+  for (const z of [-0.38, 0.38]) {
+    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.25), white);
+    ear.position.set(1.03, 1.3, z);
+    ear.rotation.x = Math.sign(z) * 0.28;
+    ear.castShadow = true;
+    group.add(ear);
+  }
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.1), black);
+  tail.position.set(-0.96, 0.83, 0);
+  tail.rotation.z = -0.28;
+  tail.castShadow = true;
+  group.add(body, head, snout, tail);
   group.scale.setScalar(1.2);
   return group;
 }
@@ -4654,7 +4394,7 @@ function createCamel(index) {
   const dark = new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.86 });
   const saddle = new THREE.MeshStandardMaterial({ color: 0x7d2f35, roughness: 0.74 });
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.82, 0.64), coat);
+  const body = new THREE.Mesh(animalBodyGeometry(2.05, 0.82, 0.64), coat);
   body.position.y = 1.05;
   body.castShadow = true;
 
@@ -4669,7 +4409,7 @@ function createCamel(index) {
   neck.rotation.z = -0.44;
   neck.castShadow = true;
 
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.44, 0.42), coat);
+  const head = new THREE.Mesh(animalBodyGeometry(0.58, 0.44, 0.42), coat);
   head.position.set(1.38, 1.86, 0);
   head.castShadow = true;
 
@@ -6611,6 +6351,7 @@ function frameLerpAmount(amountAt60Fps, delta) {
 
 function createPerfDebugOverlay() {
   const node = document.createElement("div");
+  node.id = "perf-debug";
   node.setAttribute("aria-hidden", "true");
   Object.assign(node.style, {
     position: "fixed",
@@ -6633,6 +6374,10 @@ function createPerfDebugOverlay() {
 
 function updatePerfDebug(delta, elapsed) {
   if (!perfDebugNode) return;
+  if (delta > 0 && elapsed > 3) {
+    perfFrameTimes[perfFrameCursor] = delta * 1000;
+    perfFrameCursor = (perfFrameCursor + 1) % 240;
+  }
   if (delta > 0) {
     perfDebugFps += (1 / delta - perfDebugFps) * 0.08;
   }
@@ -6640,8 +6385,11 @@ function updatePerfDebug(delta, elapsed) {
   lastPerfDebugUpdate = elapsed;
 
   const displaySize = getRenderDisplaySize();
+  const sortedTimes = [...perfFrameTimes].sort((a, b) => a - b);
+  const p50 = sortedTimes[Math.floor(sortedTimes.length * 0.5)] || 0;
+  const p95 = sortedTimes[Math.floor(sortedTimes.length * 0.95)] || 0;
   perfDebugNode.textContent = [
-    `fps ${Math.round(perfDebugFps)}`,
+    `fps ${Math.round(perfDebugFps)} frame ms p50 ${p50.toFixed(1)} p95 ${p95.toFixed(1)}`,
     `itchCompat ${ITCH_COMPAT_MODE ? "on" : "off"}${runtimeInfo.forced ? " forced" : ""}`,
     `embedded ${runtimeInfo.embedded ? "yes" : "no"}`,
     `dpr ${Number(window.devicePixelRatio || 1).toFixed(2)}`,
