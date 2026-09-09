@@ -1052,7 +1052,7 @@ body[data-ui-state="SETTINGS"] #message {
   width: 390px;
   padding: 0;
   gap: 24px;
-  overflow: visible;
+  overflow: auto;
   text-align: left;
   border: 0;
   background: none;
@@ -1145,11 +1145,22 @@ body[data-ui-state="MAIN_MENU"]::before {
   .radar-label span { display: none; }
   .energy-shortcut { display: none; }
 }
-@media (max-height: 620px) and (min-width: 521px) {
+@media (max-height: 620px) {
   #main-menu { gap: 14px; max-height: calc(100vh - 24px); overflow: auto; }
   #main-menu h1 { font-size: 56px; }
   #main-menu .primary-button { min-height: 42px; }
   .brand-line { display: none; }
+}
+/* Keep the launch action on screen in short embedded and portrait windows. */
+@media (max-height: 480px) {
+  #main-menu { gap: 12px; padding: 12px; }
+  #main-menu h1 { margin: 0; font-size: 44px; }
+  #main-menu .hero-copy,
+  #main-menu .menu-footer { display: none; }
+  #main-menu .main-menu-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #main-menu #play-button { grid-column: 1 / -1; min-height: 48px; }
+  #main-menu .primary-button { padding: 0 10px; font-size: 0.7rem; }
+  #main-menu .secondary span + span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

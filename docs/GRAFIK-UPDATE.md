@@ -109,3 +109,13 @@ wurde mit Missionsstart, Tastatureingaben und sichtbarem Strahl geprüft: keine
 Browser-/Shaderfehler, AO-Auflösung wie vorgesehen 563 × 316, Vorschau bei
 60 FPS (Median 16,7 ms, p95 17,5 ms). Dies prüft den Rendering-Pfad lokal,
 nicht eine tatsächliche Veröffentlichung in einem itch.io-Iframe.
+
+## Korrektur: Startbutton in niedrigen Fenstern
+
+Der Startbutton heißt jetzt eindeutig „Start Game“. Die kompakte Menüansicht
+wird auch bei schmalen, niedrigen Fenstern aktiviert; bei höchstens 480 px Höhe
+entfallen dekorative Zusatztexte und die Nebenaktionen stehen nebeneinander.
+Vorher lag der Button bei 390 × 320 unterhalb des sichtbaren Menübereichs.
+Nach der Korrektur sind Sichtbarkeit und Klickziel bei 320 × 480, 390 × 320,
+640 × 360 und 1280 × 720 geprüft. Ein echter Klick führte zu `PLAYING` mit
+laufendem Wellentimer. Produktionsbuild erfolgreich.
