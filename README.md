@@ -8,14 +8,15 @@ Vite and a custom Blender model library.
 
 ![UFO Cow Hunt — Blender key art using the actual game models](docs/itch-io/media/banner-1920x1080.png)
 
+[Play on itch.io](https://eldooderino.itch.io/ufo-cow-hunt) ·
 [Play on GitHub Pages](https://ddave82.github.io/Ufo-Cow-Hunt/) ·
-[Visual update devlog](docs/itch-io/DEVLOG-EN.md) ·
+[Visual update devlog](https://eldooderino.itch.io/ufo-cow-hunt/devlog/1686095/a-new-look-for-ufo-cow-hunt-39-models-three-refreshed-worlds) ·
 [itch.io upload guide & media](docs/itch-io/README.md) ·
 [Changelog](CHANGELOG.md)
 
-> Current development: `codex/visual-refresh`. The hosted GitHub Pages version may
-> differ until that branch is merged or deployed. The itch.io ZIP is built from the
-> current checkout. Desktop keyboard controls; touch controls are not implemented.
+> The October visual update is live on itch.io. GitHub Pages deploys automatically
+> from `main`; itch.io uploads are packaged separately from the current checkout.
+> Desktop keyboard controls; touch controls are not implemented.
 
 ## Three worlds to explore
 

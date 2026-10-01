@@ -3,6 +3,19 @@
 This folder contains ready-to-use copy and images for the visual update. Nothing in
 this kit automatically publishes to itch.io.
 
+## Published visual update
+
+The update is live on [itch.io](https://eldooderino.itch.io/ufo-cow-hunt), with the
+[illustrated English devlog](https://eldooderino.itch.io/ufo-cow-hunt/devlog/1686095/a-new-look-for-ufo-cow-hunt-39-models-three-refreshed-worlds).
+The project uses the new cover, banner, page copy and theme below. The screenshot
+sidebar is enabled, with the five new images first. The previous game archive is
+hidden, and the new ZIP is the only browser-playable upload. The hosted build was
+started into Farm Night in Chrome, and all six inline devlog images were checked.
+
+For the live gallery, the full-resolution model overview was exported as a
+high-quality JPEG (406 KB) to fit itch.io's 3 MB image limit. The original PNG remains
+in this kit.
+
 ## Upload the game
 
 Run `npm run package:itch` from the repository root (Node/npm + Python 3 required).
