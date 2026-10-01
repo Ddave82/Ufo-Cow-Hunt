@@ -1,0 +1,163 @@
+{
+  "assets": {
+    "ufo": {
+      "triangles": 4300,
+      "meshes": 125
+    },
+    "cow": {
+      "triangles": 2059,
+      "meshes": 52
+    },
+    "camel": {
+      "triangles": 2000,
+      "meshes": 62
+    },
+    "polar_bear": {
+      "triangles": 1520,
+      "meshes": 33
+    },
+    "farmer": {
+      "triangles": 716,
+      "meshes": 20
+    },
+    "traveler": {
+      "triangles": 700,
+      "meshes": 20
+    },
+    "explorer": {
+      "triangles": 760,
+      "meshes": 20
+    },
+    "drone": {
+      "triangles": 676,
+      "meshes": 14
+    },
+    "energy_core": {
+      "triangles": 158,
+      "meshes": 4
+    },
+    "barn": {
+      "triangles": 868,
+      "meshes": 22
+    },
+    "silo": {
+      "triangles": 1060,
+      "meshes": 24
+    },
+    "windmill": {
+      "triangles": 574,
+      "meshes": 18
+    },
+    "fence_post": {
+      "triangles": 96,
+      "meshes": 4
+    },
+    "fence_rail": {
+      "triangles": 44,
+      "meshes": 1
+    },
+    "hay_bale": {
+      "triangles": 436,
+      "meshes": 6
+    },
+    "lantern": {
+      "triangles": 132,
+      "meshes": 7
+    },
+    "pine": {
+      "triangles": 96,
+      "meshes": 4
+    },
+    "pine_snow": {
+      "triangles": 168,
+      "meshes": 7
+    },
+    "palm": {
+      "triangles": 208,
+      "meshes": 15
+    },
+    "cactus": {
+      "triangles": 244,
+      "meshes": 19
+    },
+    "shrub": {
+      "triangles": 96,
+      "meshes": 6
+    },
+    "grass": {
+      "triangles": 15,
+      "meshes": 5
+    },
+    "reed": {
+      "triangles": 195,
+      "meshes": 15
+    },
+    "rock": {
+      "triangles": 20,
+      "meshes": 1
+    },
+    "pebble": {
+      "triangles": 20,
+      "meshes": 1
+    },
+    "path_stone": {
+      "triangles": 20,
+      "meshes": 1
+    },
+    "pyramid": {
+      "triangles": 164,
+      "meshes": 11
+    },
+    "tent": {
+      "triangles": 223,
+      "meshes": 11
+    },
+    "desert_marker": {
+      "triangles": 62,
+      "meshes": 3
+    },
+    "sandstone_block": {
+      "triangles": 132,
+      "meshes": 3
+    },
+    "ice_block": {
+      "triangles": 132,
+      "meshes": 3
+    },
+    "ice_outpost": {
+      "triangles": 2662,
+      "meshes": 61
+    },
+    "iceberg": {
+      "triangles": 80,
+      "meshes": 5
+    },
+    "ice_shard": {
+      "triangles": 48,
+      "meshes": 3
+    },
+    "ice_floe": {
+      "triangles": 48,
+      "meshes": 2
+    },
+    "ice_arch": {
+      "triangles": 164,
+      "meshes": 5
+    },
+    "ice_wall": {
+      "triangles": 440,
+      "meshes": 10
+    },
+    "ice_crystal": {
+      "triangles": 44,
+      "meshes": 2
+    },
+    "cloud": {
+      "triangles": 100,
+      "meshes": 5
+    }
+  },
+  "count": 39,
+  "source": "library.blend",
+  "game_export": "models.glb"
+}

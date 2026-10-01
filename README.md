@@ -1,155 +1,150 @@
 # UFO Cow Hunt
 
-<img src="assets/logo.png" alt="UFO Cow Hunt logo" width="25%">
+**Quiet skies. Questionable intentions.**
 
-A small 3D browser game built with Three.js: fly a UFO across stylized low-poly night landscapes, find animals, and abduct them with your light beam. Between radar sweeps, search drones, synth music, desert ruins, frozen ridges, farm fields, improved night scenery, and sci-fi sound effects, the goal is to clear three arcade hunting waves as smoothly as possible.
+Pilot a UFO through three low-poly night worlds, beam up animals, collect energy and
+stay ahead of patrol drones. A small desktop browser arcade game built with Three.js,
+Vite and a custom Blender model library.
 
-![UFO Cow Hunt](https://img.shields.io/badge/Three.js-3D%20Browsergame-79fff0)
-![Vite](https://img.shields.io/badge/Vite-dev%20server-fff2a5)
+![UFO Cow Hunt — Blender key art using the actual game models](docs/itch-io/media/banner-1920x1080.png)
 
-## Play
+[Play on GitHub Pages](https://ddave82.github.io/Ufo-Cow-Hunt/) ·
+[Visual update devlog](docs/itch-io/DEVLOG-EN.md) ·
+[itch.io upload guide & media](docs/itch-io/README.md) ·
+[Changelog](CHANGELOG.md)
 
-[Play UFO Cow Hunt on GitHub Pages](https://ddave82.github.io/Ufo-Cow-Hunt/)
+> Current development: `codex/visual-refresh`. The hosted GitHub Pages version may
+> differ until that branch is merged or deployed. The itch.io ZIP is built from the
+> current checkout. Desktop keyboard controls; touch controls are not implemented.
 
-<img src="assets/cowhunt_cover.png" alt="UFO Cow Hunt cover" width="600">
+## Three worlds to explore
 
-## Gameplay
+| Mission | Targets | Scenery |
+| --- | --- | --- |
+| **Farm Night** | Cows + a hidden farmer | Meadows, ponds, fences, barn, silo, windmill and wildflowers |
+| **Desert Hunt** | Camels + a hidden traveler | Sculpted dunes, sandstone formations, palm oases, tents and a pyramid |
+| **Ice Drift** | Polar bears + a hidden explorer | Snowdrifts, frozen lakes, ice peaks, crystals and an ice outpost |
 
-You control a UFO across selectable mission zones. The current levels are Farm Night with cows, Desert Hunt with camels, and Ice Drift with polar bears. Animals give points, a rare bonus human, traveler, or explorer gives extra points, and energy crystals recharge your beam. Search drones are not instant-death enemies, but they trigger loud alarms, flash the HUD, slow the UFO, and drain beam energy when they lock onto you.
+![Desert Hunt — screenshot from the current browser build](docs/itch-io/media/gameplay-desert.jpg)
 
-Each mission is split into three waves in the same selected level:
+## How to play
 
-- Wave 1: abduct 10 animals in 1:35
-- Wave 2: abduct 15 animals in 1:55
-- Wave 3: abduct 20 animals in 2:15
+Each mission has three timed waves: **10 animals in 1:35**, **15 in 1:55**, then
+**20 in 2:15**. Fly above a target and hold the tractor beam to collect it. Build
+combos, find the bonus character and touch floating energy cores to recharge.
+Cores are optional and do not require the beam.
 
-Energy crystals are optional support items. They float at UFO flight height and are collected by touching them, without using the beam. They do not need to be collected to finish a wave or complete the mission, but they help keep the beam ready. When a wave timer runs out, the next wave starts and only the points collected in time count. After Wave 3 is cleared in time, the UFO blasts into the sky and the takeoff sound plays; if Wave 3 times out, the final score is locked with the points collected so far.
-
-The mission-complete screen shows the final score, mission time, score breakdown, and how many level animals were collected out of the total available across all three waves.
-
-## Difficulty
-
-Drone pressure can be changed in the settings menu:
-
-- Easy: no drones
-- Normal: 3 drones
-- Hard: 4 drones
-
-## Features
-
-- Low-poly 3D landscapes with terrain, clouds, stars, moonlight, and level-specific props
-- Level selection with Farm Night, Desert Hunt, and Ice Drift
-- Farm Night with fields, improved ponds, trees, fences, hay bales, a windmill, a silo, cows, and a rare bonus human
-- Desert Hunt with warmer yellow sand, dunes, sandstone boundary blocks, palm oases, rocks, cacti, Bedouin tent camps, camels, a desert traveler, and a collidable pyramid
-- Ice Drift with snowy terrain, frozen lakes, icebergs, snow pines, polar bears, glowing crystals, and a polar explorer bonus human
-- Scout-07 UFO with a ceramic hull, copper trim, segmented engine lights, a reflective glass canopy, and a visible alien pilot
-- Light beam for abducting level animals and bonus targets
-- Three-wave progression with wave timers, wave summaries, score bonuses, and time-up scoring
-- Wave-specific animal behavior: boost scares animals from Wave 2 onward, and targets wander slowly in Wave 3
-- Rotating radar with targets, drones, and world boundary
-- Score system with combo multiplier and final score breakdown
-- Beam energy, boost, and touch-collected floating energy crystals with forgiving UFO-rim pickup contact
-- Search drones with louder contact alarms, visible red HUD feedback, scan beams, route-center markers, UFO slowdown, and energy-drain behavior
-- Difficulty setting for drone pressure: Easy disables drones, Normal uses 3 drones, and Hard uses 4 drones
-- Streamlined main menu with direct play, mission selection, and settings
-- Contextual tutorial hints for movement, beam use, energy crystals, drones, and boost
-- Level selection, settings menu, and larger mission-complete reward screen
-- Separate volume controls for UFO/effects and music
-- Music playlist using `music_1.mp3` and `music_2.mp3`
-- Ambient sound, beam sound, takeoff sound, and gameplay feedback sounds
-- Countdown sound near the end of each wave
-
-## Controls
+Drones slow the UFO and drain energy on contact. Choose Easy (no drones), Normal
+(three) or Hard (four). From wave two, boost can scare animals; in wave three,
+targets wander. Wave timeouts advance the mission; clear the last wave in time for
+the takeoff finish. The results screen breaks down animals, pickups and bonuses.
 
 | Key | Action |
 | --- | --- |
-| `W` or `Arrow Up` | Thrust forward |
-| `A` / `D` or `Arrow Left` / `Arrow Right` | Turn the UFO |
-| `S` or `Arrow Down` | Brake |
-| `Space` | Activate the light beam |
-| `Shift` | Boost |
-| `Esc` | Open/close settings |
-| `M` | Mute sound |
+| **W / ↑** | Thrust forward |
+| **A / D / ← / →** | Turn |
+| **S / ↓** | Brake |
+| **Space** | Tractor beam |
+| **Shift** | Boost |
+| **Esc** | Settings / pause |
+| **M** | Mute |
 
-## Local Setup
+Contextual hints explain the controls. Settings include drone difficulty, music and
+effects volume. Music, ambience and beam/takeoff/countdown sounds are bundled locally.
 
-Requirements:
+## The October visual update
 
-- Node.js
-- npm
+The UFO, animals, characters, buildings and scenery now share **39 custom low-poly
+Blender models**. The Scout-07 saucer has a ceramic hull, copper trim, glowing engines
+and a visible pilot. Cow, camel and polar bear silhouettes stay readable in flight.
 
-Install dependencies:
+![All 39 models — a Blender catalogue render, shown at display scales](docs/itch-io/media/models-overview.png)
 
-```bash
-npm install
+The landscapes have also changed: block rows around the desert and ice maps became
+natural formations; dunes and snowdrifts have more shape. Ground colors blend
+smoothly, fine wind patterns fade in the distance, and final-image anti-aliasing
+reduces jagged edges. Small stone groups, wildflowers, dust, snow and light motes add
+life. Ambient particle motion respects the reduced-motion preference.
+
+Repeated props use instancing, static scenery is batched, and cached model resources
+survive mission changes. The model library has **21,480 unique triangles** and a
+**1.96 MB GLB**. Desert and ice ground meshes each use **25,088 triangles**. These
+are geometry budgets, not FPS guarantees; actual performance depends on the device,
+viewport and render mode.
+
+![Ice Drift — smooth snow and low-poly formations in the game](docs/itch-io/media/gameplay-ice.jpg)
+
+## Run and build
+
+Use Node.js **20.19+ or 22.12+** (Vite 8), npm, and a modern WebGL2 browser.
+
+```sh
+npm ci
+npm run dev                 # http://127.0.0.1:5173/
+npm run build               # dist/, with relative asset paths
+npm run preview             # production preview, usually port 4173
 ```
 
-Start the dev server:
+For GitHub Pages use `npm run build:pages`, which sets `/Ufo-Cow-Hunt/` as the base.
+For itch.io use the relative-path build:
 
-```bash
-npm run dev
+```sh
+npm run package:itch        # also requires Python 3 (standard library only)
 ```
 
-Then open the game in your browser:
+This creates:
 
-```text
-http://127.0.0.1:5173/
+- `releases/ufo-cow-hunt-itch.zip` — upload this as the HTML game; `index.html` is at the root.
+- `releases/ufo-cow-hunt-press-kit.zip` — devlogs, page copy, screenshots, cover and banner.
+- `releases/release-manifest.json` — source commit, archive sizes and SHA-256 checksums.
+
+Generated archives and `dist/` are ignored by Git. See the
+[upload guide](docs/itch-io/README.md) for settings and media captions.
+
+## Blender sources
+
+| File | Purpose |
+| --- | --- |
+| [library.blend](assets/models/library/library.blend) | Editable catalogue, one collection per asset |
+| [models.glb](assets/models/library/models.glb) | Native-scale game export |
+| [manifest.json](assets/models/library/manifest.json) | Per-model triangle and mesh counts |
+| [press-kit.blend](assets/models/library/press-kit.blend) | Staged promotional scene using game models |
+| [scout-07.blend](assets/models/ufo/scout-07.blend) | Reviewed UFO source |
+| [meadow-01.blend](assets/models/cow/meadow-01.blend) | Reviewed cow source |
+| [dune-01.blend](assets/models/camel/dune-01.blend) | Standalone camel source |
+
+Created with Blender 4.5 LTS. Regenerate from the repository root:
+
+```sh
+blender --background --factory-startup --python scripts/blender/build_library.py
+blender --background --factory-startup --python scripts/blender/prepare_viewer.py
+blender --background --factory-startup --python scripts/blender/render_press_kit.py
 ```
 
-## Build
+The catalogue uses normalized display scales. Use `build_library.py` for native-scale
+exports; do not export the arranged catalogue as the game map. Terrain, water and sky
+are generated by the runtime. The promotional scene is staged key art, not an exact
+level export. Blender scripts do not need to run to play or build the browser game.
 
-```bash
+## Validation and diagnostics
+
+```sh
+npm run check:models
 npm run build
-```
-
-Build specifically for GitHub Pages:
-
-```bash
 npm run build:pages
 ```
 
-Preview the production build:
+On the development server, open `/?modelTest=1` for integration checks, or
+`/?modelTest=1&forceItchCompat=1` for the compatibility rendering path. They exercise
+all three waves of all missions, beam collection, bonus targets, pickups, drone drain,
+rotors, mission completion and takeoff. They also check terrain vertices, continuous
+ice shores, particle budgets, final anti-aliasing and repeated mission changes.
 
-```bash
-npm run preview
-```
+The checks reposition targets and advance simulation directly; they are not a full
+real-time playthrough or a test of itch.io hosting. The runner is removed from
+production builds. `?perfDebug=1` shows render counters and frame-time percentiles.
 
-## Sound Files
-
-Music and effects are stored locally in the `sounds/` folder and bundled as assets by Vite during the build.
-
-- `music_1.mp3` and `music_2.mp3`: looping music playlist
-- `atmo.mp3`: ambient atmosphere, played at regular intervals
-- `beam.mp3`: beam sound while abducting targets
-- `takeoff.mp3`: sound for successful level completion
-- `countdown.mp3`: warning sound near the end of each wave timer
-
-## Tech Stack
-
-- [Three.js](https://threejs.org/) for 3D rendering
-- [Vite](https://vite.dev/) for the dev server and build pipeline
-- Web Audio API and HTML Audio for synth sounds and MP3 playback
-
-## Visual refresh and rollback
-
-The September 2026 visual refresh is developed on `codex/visual-refresh`. The previous working state, including its lockfile change, is preserved on `backup/pre-visual-refresh-2026-09-09` (`d2dad14`). See [the visual refresh notes](docs/GRAFIK-UPDATE.md) for rollback commands, model budgets, and validation.
-
-Run `node scripts/check-ufo-budget.mjs` to compare the model costs with the backup. Add `?perfDebug=1` to the local game URL for rendering counters and frame-time percentiles.
-
-## Status
-
-Playable prototype with three mission zones, timed waves, scoring, drone pressure, and local audio assets.
-
-## Changelog
-
-- Added three playable mission zones: Farm Night, Desert Hunt, and Ice Drift.
-- Added the full three-wave mission structure with timers, bonuses, and final score breakdown.
-- Expanded the game with mission-specific targets: cows, camels, and polar bears.
-- Added richer low-poly environments with landmarks, hazards, energy pickups, and themed scenery.
-- Polished the nighttime visuals with softer stars, cleaner drone markers, refined farm water, a windmill, a silo, and a more finished UFO design.
-- Improved the arcade feel with drone pressure, boost behavior, tutorial hints, settings, and layered audio.
-
-## Roadmap
-
-- Terrain optimization
-- Add a 3D landmark to the green zone
+Implementation notes and the earlier rollback checkpoint are in
+[the historical September report](docs/GRAFIK-UPDATE.md). Current gameplay code lives
+in `src/main.js`, model loading/batching in `src/models/`, and ground materials and
+ambient scenery in `src/landscape/`.

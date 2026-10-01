@@ -3,11 +3,29 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import "./styles.css";
+import { createTerrainMaterial, createGroundDetails } from "./landscape/surface.js";
+import { createNaturalBoundary, createAtmosphere, createMeadowFlowers } from "./landscape/atmosphere.js";
 import { createUfo } from "./models/ufo.js";
+import { loadModelLibrary, createModel, modelForMesh, modelForInstances, modelInstances, retainModelResources, modelLibraryStats } from "./models/library.js";
+
+const modelLoadButton = document.querySelector("#play-button");
+const modelLoadLabel = modelLoadButton.textContent;
+modelLoadButton.disabled = true;
+modelLoadButton.textContent = "Loading models…";
+try {
+  await loadModelLibrary();
+  modelLoadButton.textContent = modelLoadLabel;
+  modelLoadButton.disabled = false;
+} catch (error) {
+  modelLoadButton.textContent = "Models unavailable — reload";
+  modelLoadButton.disabled = false;
+  modelLoadButton.addEventListener("click", () => location.reload());
+  throw error;
+}
 
 const atmoUrl = new URL("../sounds/atmo.mp3", import.meta.url).href;
 const musicUrls = [
@@ -130,7 +148,7 @@ const gtaoPass = new GTAOPass(
   { radius: 0.32, distanceExponent: 1.7, thickness: 0.72, distanceFallOff: 0.78, scale: 0.72, samples: gtaoSamples }
 );
 gtaoPass.blendIntensity = 0.46;
-gtaoPass.pdSamples = gtaoSamples;
+gtaoPass.updatePdMaterial({ samples: ITCH_COMPAT_MODE ? 8 : 16, radius: 6, lumaPhi: 6, depthPhi: 2, normalPhi: 3 });
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(initialRenderSize.width, initialRenderSize.height),
   0.28,
@@ -142,6 +160,9 @@ composer.addPass(renderPass);
 composer.addPass(gtaoPass);
 composer.addPass(bloomPass);
 composer.addPass(outputPass);
+// Canvas MSAA does not anti-alias EffectComposer render targets.
+const smaaPass = new SMAAPass(initialRenderSize.width * initialPixelRatio, initialRenderSize.height * initialPixelRatio);
+composer.addPass(smaaPass);
 resizeGtaoPass(initialRenderSize.width, initialRenderSize.height);
 
 let lastRenderWidth = initialRenderSize.width;
@@ -295,6 +316,8 @@ const collectibles = [];
 const powerups = [];
 const hazards = [];
 const windmillRotors = [];
+let ambientLandscape = null;
+const reducedLandscapeMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const waterSurfaces = [];
 const waterRipples = [];
 const difficultyConfigs = {
@@ -362,7 +385,7 @@ const visualPresets = {
     bloomStrength: 0.24,
     bloomRadius: 0.34,
     bloomThreshold: 0.84,
-    aoIntensity: 0.43,
+    aoIntensity: 0.3,
     beamColor: 0x5dffe9,
     beamCore: 0xbffff8,
     skyTop: 0x08030d,
@@ -386,7 +409,7 @@ const visualPresets = {
     bloomStrength: 0.28,
     bloomRadius: 0.4,
     bloomThreshold: 0.82,
-    aoIntensity: 0.4,
+    aoIntensity: 0.28,
     beamColor: 0x62fff4,
     beamCore: 0xd4fffb,
     skyTop: 0x010817,
@@ -604,6 +627,14 @@ setUiState(UI_STATES.MAIN_MENU);
 updateHud(true);
 if (PERF_DEBUG) {
   perfDebugNode = createPerfDebugOverlay();
+  window.__modelDebug = {
+    scene, camera, renderer, ufo, collectibles, powerups, hazards, windmillRotors,
+    library: modelLibraryStats,
+    snapshot: () => ({ level: activeLevelId, state: uiState, score, beamEnergy, beamActive,
+      wave: currentWaveIndex, collected: waveCowsCollected, cows: waveCowGoal,
+      geometries: renderer.info.memory.geometries, draws: renderer.info.render.calls }),
+    selectLevel, startMission
+  };
 }
 
 window.addEventListener("resize", scheduleResize);
@@ -945,9 +976,12 @@ function rebuildLevel() {
   windmillRotors.length = 0;
   waterSurfaces.length = 0;
   waterRipples.length = 0;
+  ambientLandscape = null;
   terrain = createTerrain();
   addLevelObject(terrain);
   addLandscapeDetails();
+  ambientLandscape = createAtmosphere(activeLevelId, terrainHeight, reducedLandscapeMotion.matches);
+  addLevelObject(ambientLandscape);
   freezeStaticLevelObjects();
   spawnCollectibles();
   spawnPowerups();
@@ -960,6 +994,7 @@ function clearLevelObjects() {
   const roots = [...levelObjects];
   const levelRootSet = new Set(roots);
   const retainedResources = createResourceCollection();
+  retainModelResources(retainedResources);
   scene.children.forEach((object) => {
     if (!levelRootSet.has(object)) collectObjectResources(object, retainedResources);
   });
@@ -1037,9 +1072,27 @@ function releaseObjectResources(root, retained, released) {
 
 function freezeStaticLevelObjects() {
   const movingTransforms = new Set([...windmillRotors, ...waterRipples]);
+  // Batch across prop roots, partitioned spatially to retain useful culling.
+  const cells = new Map();
+  const before = createResourceCollection();
   levelObjects.forEach((root) => {
+    collectObjectResources(root, before);
+    const key = `${Math.floor(root.position.x / 42)}:${Math.floor(root.position.z / 42)}`;
+    if (!cells.has(key)) cells.set(key, new THREE.Group());
+    cells.get(key).add(root);
+  });
+  levelObjects.length = 0;
+  cells.forEach((root) => {
+    root.name = "landscape-cell";
     batchOpaqueMeshes(root, movingTransforms);
     freezeObjectTransforms(root, movingTransforms);
+    addLevelObject(root);
+  });
+  const retained = createResourceCollection();
+  retainModelResources(retained);
+  scene.traverse((root) => { if (root.geometry) retained.geometries.add(root.geometry); });
+  before.geometries.forEach((geometry) => {
+    if (!retained.geometries.has(geometry)) geometry.dispose();
   });
 }
 
@@ -1451,13 +1504,16 @@ function createTerrain() {
   const geometry = new THREE.PlaneGeometry(
     worldSize,
     worldSize,
-    terrainSegments,
-    terrainSegments
+    activeLevelId === "farm" ? terrainSegments : 112,
+    activeLevelId === "farm" ? terrainSegments : 112
   );
   geometry.rotateX(-Math.PI / 2);
 
   const colors = [];
   const color = new THREE.Color();
+  const accent = new THREE.Color();
+  const blend = (h, saturation, light, weight) => color.lerp(accent.setHSL(h, saturation, light), THREE.MathUtils.clamp(weight, 0, 1));
+  const smooth = THREE.MathUtils.smoothstep;
   const positions = geometry.attributes.position;
 
   for (let i = 0; i < positions.count; i += 1) {
@@ -1472,42 +1528,27 @@ function createTerrain() {
     const path = pathAmount(x, z);
     const pasture = pastureAmount(x, z);
     const dryLand = dryLandAmount(x, z);
-    const detail =
-      Math.sin(x * 0.43 + z * 0.19) * 0.018 +
-      Math.cos(x * 0.25 - z * 0.37) * 0.012 +
-      Math.sin((x - z) * 0.61) * 0.008;
+    // Continuous palette blends avoid grid-shaped color boundaries.
     if (activeLevelId === "desert") {
       const dune = desertDuneAmount(x, z);
-      const fineSand =
-        Math.sin(x * 0.18 + z * 0.09) * 0.016 +
-        Math.cos(x * 0.11 - z * 0.15) * 0.014;
-      const sandLight = THREE.MathUtils.clamp(0.43 + height * 0.004 + dune * 0.028 + detail * 0.13 + fineSand, 0.36, 0.54);
-      color.setHSL(0.1 + Math.sin(x * 0.021 + z * 0.013) * 0.005, 0.78, sandLight);
-      if (path > 0.35) color.offsetHSL(-0.006, -0.06, -path * 0.022);
-      if (ridge > 0.46) color.offsetHSL(-0.012, -0.08, ridge * 0.014);
-      if (height > 5.4) color.offsetHSL(-0.004, -0.06, 0.014);
+      color.setHSL(0.105 + Math.sin(x * 0.018 + z * 0.014) * 0.004, 0.63, 0.46 + height * 0.004 + dune * 0.028);
+      blend(0.092, 0.53, 0.43, smooth(path, 0.08, 0.8) * 0.24);
+      blend(0.098, 0.55, 0.51, smooth(ridge, 0.35, 0.95) * 0.32);
     } else if (activeLevelId === "ice") {
       const frost = iceFrostAmount(x, z);
-      const snowLight = THREE.MathUtils.clamp(0.48 + height * 0.006 + frost * 0.075 + detail * 0.22, 0.38, 0.68);
-      color.setHSL(0.56 + Math.sin(x * 0.02) * 0.012, 0.5, snowLight);
-      if (path > 0.18) color.setHSL(0.54, 0.45, 0.44 + path * 0.06 + detail * 0.1);
-      if (shore > 0.08) color.setHSL(0.52, 0.58, 0.47 + shore * 0.09);
-      if (ridge > 0.42) color.setHSL(0.58, 0.36, 0.5 + ridge * 0.07 + detail * 0.1);
-      if (water) color.setHSL(0.53, 0.76, 0.5 + Math.max(0, shore) * 0.07);
+      color.setHSL(0.55, 0.3, 0.62 + height * 0.004 + frost * 0.045);
+      blend(0.54, 0.4, 0.53, smooth(path, 0, 0.75) * 0.3);
+      blend(0.53, 0.43, 0.57, smooth(shore, 0, 0.85) * 0.45);
+      blend(0.56, 0.22, 0.72, smooth(ridge, 0.3, 0.95) * 0.4);
+      blend(0.53, 0.58, 0.52, waterBasinAmount(x, z));
     } else {
-      const meadow =
-        0.17 +
-        height * 0.008 +
-        dryLand * 0.028 +
-        detail * 0.64;
-
-      color.setHSL(0.34 + Math.sin(x * 0.04) * 0.018, 0.4, meadow);
-      if (pasture > 0.25) color.setHSL(0.31, 0.38, 0.19 + pasture * 0.045 + detail * 0.18);
-      if (path > 0.24) color.setHSL(0.095, 0.42, 0.19 + path * 0.055 + detail * 0.18);
-      if (shore > 0.08) color.setHSL(0.13, 0.34, 0.17 + shore * 0.058);
-      if (ridge > 0.42) color.setHSL(0.17, 0.42, 0.18 + ridge * 0.085 + detail * 0.18);
-      if (height > 5.4) color.setHSL(0.13, 0.38, 0.29 + height * 0.006);
-      if (water) color.setHSL(0.54, 0.68, 0.13 + Math.max(0, shore) * 0.025);
+      color.setHSL(0.34 + Math.sin(x * 0.04) * 0.012, 0.4, 0.18 + height * 0.008 + dryLand * 0.028);
+      blend(0.31, 0.38, 0.23, smooth(pasture, 0.1, 0.8));
+      blend(0.095, 0.42, 0.24, smooth(path, 0.08, 0.72));
+      blend(0.13, 0.34, 0.22, smooth(shore, 0.02, 0.8) * 0.7);
+      blend(0.17, 0.42, 0.26, smooth(ridge, 0.35, 0.95) * 0.65);
+      blend(0.13, 0.38, 0.33, smooth(height, 5.0, 7.8));
+      if (water) blend(0.54, 0.68, 0.14, waterBasinAmount(x, z));
     }
     colors.push(color.r, color.g, color.b);
   }
@@ -1515,13 +1556,7 @@ function createTerrain() {
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
 
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.96,
-    metalness: 0.02,
-    emissive: activeLevelId === "desert" ? 0x6a4514 : activeLevelId === "ice" ? 0x102a3a : 0x000000,
-    emissiveIntensity: activeLevelId === "desert" ? 0.24 : activeLevelId === "ice" ? 0.16 : 0
-  });
+  const material = createTerrainMaterial(activeLevelId);
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.receiveShadow = true;
@@ -1555,7 +1590,7 @@ function terrainHeight(x, z) {
 
 function desertTerrainHeight(x, z) {
   const water = isWater(x, z);
-  const lakeSink = water ? -1.25 : 0;
+  const lakeSink = -1.25 * waterBasinAmount(x, z);
   const shoreLift = shoreAmount(x, z) * 0.32;
   const pyramidDistance = Math.hypot(x - desertPyramid.x, z - desertPyramid.z);
   const dune =
@@ -1564,6 +1599,7 @@ function desertTerrainHeight(x, z) {
     Math.sin((x + z) * 0.035) * 1.6 +
     Math.cos((x - z) * 0.026) * 1.1 +
     desertRidgeAmount(x, z) * 3.2 +
+    Math.pow(0.5 + 0.5 * Math.sin(x * 0.21 + z * 0.08 + Math.sin(z * 0.065)), 3) * 1.1 +
     shoreLift +
     lakeSink;
 
@@ -1581,8 +1617,8 @@ function desertTerrainHeight(x, z) {
 }
 
 function iceTerrainHeight(x, z) {
-  const frozen = isWater(x, z);
-  const lakeSink = frozen ? -0.85 : 0;
+  const basin = waterBasinAmount(x, z);
+  const lakeSink = -0.85 * basin;
   const shoreLift = shoreAmount(x, z) * 0.42;
   const ridge =
     Math.sin(x * 0.056 + z * 0.018) * 2.0 +
@@ -1590,11 +1626,11 @@ function iceTerrainHeight(x, z) {
     Math.sin((x + z) * 0.032) * 1.4 +
     Math.cos((x - z) * 0.024) * 1.0 +
     iceRidgeAmount(x, z) * 3.4 +
+    Math.pow(0.5 + 0.5 * Math.sin(x * 0.17 - z * 0.12), 2) * 0.55 * (1 - basin) +
     shoreLift +
     lakeSink;
 
-  if (frozen) return ridge;
-  return Math.max(ridge, -0.38);
+  return THREE.MathUtils.lerp(Math.max(ridge, -0.38), ridge, basin);
 }
 
 function desertDuneAmount(x, z) {
@@ -1645,6 +1681,15 @@ function isWater(x, z, padding = 0) {
     const nz = (z - body.z) / (body.rz + padding);
     return nx * nx + nz * nz < 1;
   });
+}
+
+function waterBasinAmount(x, z) {
+  let amount = 0;
+  for (const body of waterBodies) {
+    const distance = Math.hypot((x - body.x) / body.rx, (z - body.z) / body.rz);
+    amount = Math.max(amount, 1 - THREE.MathUtils.smoothstep(distance, 0.72, 1.16));
+  }
+  return amount;
 }
 
 function shoreAmount(x, z) {
@@ -1964,7 +2009,7 @@ function addLandscapeDetails() {
   addWater();
   addShoreDetails();
   addComposedShorelineClusters();
-  addMeadowPatches();
+  addLevelObject(createMeadowFlowers(terrainHeight, (x, z) => isDryObjectSpot(x, z, 4) && pathAmount(x, z) < 0.2 && !isWater(x, z, 5)));
   addBoundaryFence();
   addFarmDetails();
   addTrees();
@@ -1973,33 +2018,7 @@ function addLandscapeDetails() {
 }
 
 function addDesertGroundDetails() {
-  const patchMaterial = new THREE.MeshBasicMaterial({
-    color: 0xd99b45,
-    transparent: true,
-    opacity: 0.075,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x6b3a1e,
-    transparent: true,
-    opacity: 0.09,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const geometry = new THREE.CircleGeometry(1, 24);
-
-  for (let i = 0; i < 20; i += 1) {
-    const x = ((i * 37) % 144) - 72 + Math.sin(i * 1.1) * 4.5;
-    const z = ((i * 53) % 144) - 72 + Math.cos(i * 0.8) * 4.5;
-    if (!isDryObjectSpot(x, z, 6) || isWater(x, z, 10)) continue;
-    const patch = new THREE.Mesh(geometry, i % 3 === 0 ? shadowMaterial : patchMaterial);
-    patch.rotation.x = -Math.PI / 2;
-    patch.rotation.z = i * 0.41;
-    patch.position.set(x, terrainHeight(x, z) + 0.06, z);
-    patch.scale.set(4.2 + (i % 6) * 0.72, 1.05 + (i % 5) * 0.28, 1);
-    addLevelObject(patch);
-  }
+  addLevelObject(createGroundDetails("desert", terrainHeight, (x, z) => isDryObjectSpot(x, z, 6) && !isWater(x, z, 8)));
 }
 
 function addDesertLighting() {
@@ -2019,33 +2038,7 @@ function addIceLighting() {
 }
 
 function addIceGroundDetails() {
-  const snowMaterial = new THREE.MeshBasicMaterial({
-    color: 0xe9fbff,
-    transparent: true,
-    opacity: 0.085,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const blueMaterial = new THREE.MeshBasicMaterial({
-    color: 0x7edcff,
-    transparent: true,
-    opacity: 0.065,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const geometry = new THREE.CircleGeometry(1, 24);
-
-  for (let i = 0; i < 26; i += 1) {
-    const x = ((i * 41) % 148) - 74 + Math.sin(i * 1.2) * 3.8;
-    const z = ((i * 59) % 148) - 74 + Math.cos(i * 0.9) * 4.1;
-    if (!isDryObjectSpot(x, z, 5.8)) continue;
-    const patch = new THREE.Mesh(geometry, i % 3 === 0 ? blueMaterial : snowMaterial);
-    patch.rotation.x = -Math.PI / 2;
-    patch.rotation.z = i * 0.39;
-    patch.position.set(x, terrainHeight(x, z) + 0.065, z);
-    patch.scale.set(4.2 + (i % 6) * 0.8, 1.4 + (i % 5) * 0.34, 1);
-    addLevelObject(patch);
-  }
+  addLevelObject(createGroundDetails("ice", terrainHeight, (x, z) => isDryObjectSpot(x, z, 6) && !isWater(x, z, 8)));
 }
 
 function addFrozenLakes() {
@@ -2103,43 +2096,18 @@ function addFrozenLakes() {
 }
 
 function addIceBoundaryBlocks() {
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xb9eaff,
-    emissive: 0x143e52,
-    emissiveIntensity: 0.12,
-    roughness: 0.5,
-    metalness: 0.04
-  });
-  const geometry = new THREE.BoxGeometry(4.6, 1.2, 1.5);
+  addLevelObject(createNaturalBoundary("ice", halfWorld, terrainHeight));
   const matrices = [];
-  const inset = 4.4;
-  const edge = halfWorld - inset;
-  const spacing = 7.4;
-  const sides = [
-    { start: [-edge, -edge], end: [edge, -edge], angle: 0 },
-    { start: [-edge, edge], end: [edge, edge], angle: 0 },
-    { start: [-edge, -edge], end: [-edge, edge], angle: Math.PI / 2 },
-    { start: [edge, -edge], end: [edge, edge], angle: Math.PI / 2 }
-  ];
-
-  sides.forEach((side, sideIndex) => {
-    const [x1, z1] = side.start;
-    const [x2, z2] = side.end;
-    const length = Math.hypot(x2 - x1, z2 - z1);
-    const count = Math.floor(length / spacing);
-    for (let i = 0; i <= count; i += 1) {
-      const t = i / count;
-      const x = THREE.MathUtils.lerp(x1, x2, t);
-      const z = THREE.MathUtils.lerp(z1, z2, t);
-      tempObject.position.set(x, terrainHeight(x, z) + 0.56, z);
-      tempObject.rotation.set(0, side.angle + Math.sin((i + sideIndex) * 1.4) * 0.08, 0);
-      tempObject.scale.set(0.86 + (i % 3) * 0.1, 0.7 + (i % 2) * 0.12, 0.8);
-      tempObject.updateMatrix();
-      matrices.push(tempObject.matrix.clone());
-    }
-  });
-
-  addLevelObject(createStaticInstancedMesh(geometry, material, matrices, true, true));
+  for (let i = 0; i < 5; i++) {
+    const x = iceOutpost.x + 11 + Math.sin(i * 1.8) * 3;
+    const z = iceOutpost.z + (i - 2) * 3.2;
+    tempObject.position.set(x, terrainHeight(x, z) + 0.18, z);
+    tempObject.rotation.set(0.08 * Math.sin(i), i * 0.7, 0.12 * Math.cos(i));
+    tempObject.scale.set(0.45 + (i % 2) * 0.15, 0.55, 0.7);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
+  }
+  addLevelObject(modelInstances("ice_block", matrices));
 }
 
 function addIceDetails() {
@@ -2155,178 +2123,17 @@ function addIceDetails() {
 
 function addIceOutpost() {
   const spot = findDryObjectSpot(iceOutpost.x, iceOutpost.z, 9, 830);
-  const group = new THREE.Group();
-  const iceBlock = new THREE.MeshStandardMaterial({
-    color: 0xd6f7ff,
-    emissive: 0x1d566b,
-    emissiveIntensity: 0.15,
-    roughness: 0.54,
-    transparent: true,
-    opacity: 0.94
-  });
-  const iceCap = new THREE.MeshStandardMaterial({
-    color: 0xf1feff,
-    emissive: 0x1d485d,
-    emissiveIntensity: 0.1,
-    roughness: 0.62
-  });
-  const dark = new THREE.MeshStandardMaterial({
-    color: 0x101b27,
-    emissive: 0x03070c,
-    roughness: 0.9
-  });
-  const glowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x9df7ff,
-    transparent: true,
-    opacity: 0.24,
-    depthWrite: false
-  });
-  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-
-  const makeBlock = (x, y, z, sx, sy, sz, rotationY = 0, material = iceBlock) => {
-    const block = new THREE.Mesh(blockGeometry, material);
-    block.position.set(x, y, z);
-    block.scale.set(sx, sy, sz);
-    block.rotation.y = rotationY;
-    block.castShadow = true;
-    block.receiveShadow = true;
-    group.add(block);
-    return block;
-  };
-
-  const layers = [
-    { radius: 3.25, y: 0.42, count: 18, height: 0.62 },
-    { radius: 2.85, y: 0.95, count: 16, height: 0.58 },
-    { radius: 2.35, y: 1.43, count: 14, height: 0.54 },
-    { radius: 1.82, y: 1.85, count: 11, height: 0.48 },
-    { radius: 1.22, y: 2.17, count: 8, height: 0.38 }
-  ];
-
-  layers.forEach((layer, layerIndex) => {
-    for (let i = 0; i < layer.count; i += 1) {
-      const angle = (i / layer.count) * Math.PI * 2 + layerIndex * 0.16;
-      const frontGap = Math.abs(Math.atan2(Math.sin(angle - Math.PI), Math.cos(angle - Math.PI)));
-      if (frontGap < 0.34 && layerIndex < 3) continue;
-      const x = Math.sin(angle) * layer.radius;
-      const z = Math.cos(angle) * layer.radius;
-      const width = (Math.PI * 2 * layer.radius) / layer.count * 0.78;
-      makeBlock(x, layer.y, z, width, layer.height, 0.52, angle);
-    }
-  });
-
-  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.06, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), iceCap);
-  cap.position.y = 2.42;
-  cap.scale.set(1.0, 0.48, 0.9);
-  cap.castShadow = true;
-  cap.receiveShadow = true;
-
-  const portal = new THREE.Mesh(new THREE.CapsuleGeometry(0.46, 0.74, 6, 12), dark);
-  portal.position.set(0, 0.82, -3.02);
-  portal.scale.set(1.0, 1.0, 0.18);
-  portal.castShadow = true;
-
-  makeBlock(-0.72, 0.48, -3.12, 0.34, 0.78, 0.5, -0.16);
-  makeBlock(0.72, 0.48, -3.12, 0.34, 0.78, 0.5, 0.16);
-  makeBlock(-0.5, 1.14, -3.15, 0.42, 0.34, 0.48, -0.54);
-  makeBlock(0, 1.32, -3.15, 0.5, 0.32, 0.48, 0);
-  makeBlock(0.5, 1.14, -3.15, 0.42, 0.34, 0.48, 0.54);
-
-  const threshold = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.1, 0.84), iceCap);
-  threshold.position.set(0, 0.08, -3.34);
-  threshold.castShadow = true;
-  threshold.receiveShadow = true;
-
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.58, 18), glowMaterial);
-  glow.position.set(0, 0.85, -3.21);
-  glow.rotation.y = Math.PI;
-
-  const lamp = new THREE.PointLight(0x91eaff, 1.55, 15, 1.9);
-  lamp.position.set(0, 1.55, -3.0);
-  group.add(cap, portal, threshold, glow, lamp);
+  const group = createModel("ice_outpost");
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.02, spot.z);
-  group.rotation.y = -0.45;
+  group.rotation.y = -0.45 + Math.PI;
+  const light = new THREE.PointLight(0x91eaff, 1.55, 15, 1.9);
+  light.position.set(0, 1.55, 3.0);
+  group.add(light);
   addLevelObject(group);
 }
 
 function createPolarBear(index) {
-  const group = new THREE.Group();
-  const fur = new THREE.MeshStandardMaterial({
-    color: index % 2 === 0 ? 0xfffbec : 0xe4f4f6,
-    emissive: 0x102a38,
-    emissiveIntensity: 0.08,
-    roughness: 0.78
-  });
-  const shadowFur = new THREE.MeshStandardMaterial({
-    color: 0xb9d1da,
-    emissive: 0x0a2431,
-    emissiveIntensity: 0.08,
-    roughness: 0.82
-  });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x141a1f, roughness: 0.82 });
-  const groundShadow = new THREE.MeshBasicMaterial({
-    color: 0x14364a,
-    transparent: true,
-    opacity: 0.28,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.55, 22), groundShadow);
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.set(0.32, 0.035, 0);
-  shadow.scale.set(1.35, 0.58, 1);
-
-  const body = new THREE.Mesh(animalBodyGeometry(2.25, 0.72, 0.78), fur);
-  body.position.y = 0.88;
-  body.castShadow = true;
-  body.receiveShadow = true;
-
-  const shoulder = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.82, 0.86), fur);
-  shoulder.position.set(0.62, 1.0, 0);
-  shoulder.castShadow = true;
-
-  const head = new THREE.Mesh(animalBodyGeometry(0.62, 0.48, 0.5), fur);
-  head.position.set(1.46, 1.1, 0);
-  head.castShadow = true;
-
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.32), shadowFur);
-  snout.position.set(1.92, 1.03, 0);
-  snout.castShadow = true;
-
-  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.09, 0.18), dark);
-  nose.position.set(2.12, 1.06, 0);
-
-  for (const z of [-0.17, 0.17]) {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), fur);
-    ear.position.set(1.34, 1.38, z);
-    ear.scale.set(0.8, 1.0, 0.7);
-    group.add(ear);
-
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 5), dark);
-    eye.position.set(1.82, 1.18, z * 0.72);
-    group.add(eye);
-  }
-
-  const legGeometry = new THREE.BoxGeometry(0.26, 0.68, 0.24);
-  for (const x of [-0.72, 0.12, 0.82, 1.16]) {
-    const side = x === -0.72 || x === 0.82 ? -0.24 : 0.24;
-    const leg = new THREE.Mesh(legGeometry, x < 0 ? shadowFur : fur);
-    leg.position.set(x, 0.38, side);
-    leg.rotation.z = x < 0 ? -0.08 : 0.08;
-    leg.castShadow = true;
-    group.add(leg);
-
-    const paw = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.3), dark);
-    paw.position.set(x + 0.06, 0.08, side);
-    paw.castShadow = true;
-    group.add(paw);
-  }
-
-  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), fur);
-  tail.position.set(-1.22, 0.95, 0);
-  tail.scale.set(0.75, 0.75, 0.75);
-
-  group.add(shadow, body, shoulder, head, snout, nose, tail);
+  const group = createModel("polar_bear");
   group.scale.setScalar(1.18);
   return group;
 }
@@ -2373,104 +2180,17 @@ function addIcebergs() {
   });
 }
 
-function createIceLandmarkMaterials() {
-  return {
-    highlight: new THREE.MeshStandardMaterial({
-      color: 0xf1feff,
-      emissive: 0x15394b,
-      emissiveIntensity: 0.1,
-      roughness: 0.58,
-      flatShading: true
-    }),
-    ice: new THREE.MeshStandardMaterial({
-      color: 0xb9efff,
-      emissive: 0x13455d,
-      emissiveIntensity: 0.17,
-      roughness: 0.52,
-      metalness: 0.02,
-      flatShading: true
-    }),
-    shadow: new THREE.MeshStandardMaterial({
-      color: 0x6da6c2,
-      emissive: 0x092839,
-      emissiveIntensity: 0.16,
-      roughness: 0.68,
-      flatShading: true
-    }),
-    deep: new THREE.MeshStandardMaterial({
-      color: 0x326882,
-      emissive: 0x071d2b,
-      emissiveIntensity: 0.18,
-      roughness: 0.72,
-      flatShading: true
-    }),
-    floeTop: new THREE.MeshStandardMaterial({
-      color: 0xe8fbff,
-      emissive: 0x1b5268,
-      emissiveIntensity: 0.08,
-      roughness: 0.62,
-      flatShading: true
-    }),
-    floeEdge: new THREE.MeshStandardMaterial({
-      color: 0x7bcde6,
-      emissive: 0x0f3a50,
-      emissiveIntensity: 0.1,
-      roughness: 0.7,
-      flatShading: true
-    })
-  };
-}
-
 function addIcebergFormation(config) {
-  const materials = createIceLandmarkMaterials();
-  const group = new THREE.Group();
-  const baseGeometry = new THREE.DodecahedronGeometry(1, 0);
-  const peakGeometry = new THREE.ConeGeometry(1, 1, 5);
-
-  const base = new THREE.Mesh(baseGeometry, materials.deep);
-  base.position.set(0, 1.05 * config.scale, 0);
-  base.scale.set(8.5 * config.scale, 2.05 * config.scale, 7.2 * config.scale);
-  base.rotation.set(0.2, config.rotation * 0.4, -0.08);
-  base.castShadow = true;
-  base.receiveShadow = true;
-  group.add(base);
-
-  config.peaks.forEach(([x, z, radius, height, depth, yaw, tilt], index) => {
-    const material = index === 0 ? materials.highlight : index % 2 === 0 ? materials.ice : materials.shadow;
-    const peak = new THREE.Mesh(peakGeometry, material);
-    peak.position.set(x * config.scale, (height * config.scale) / 2 + 0.65 * config.scale, z * config.scale);
-    peak.scale.set(radius * config.scale, height * config.scale, depth * config.scale);
-    peak.rotation.set(tilt, yaw, tilt * -0.7);
-    peak.castShadow = true;
-    peak.receiveShadow = true;
-    group.add(peak);
-  });
-
-  for (let i = 0; i < 6; i += 1) {
-    const angle = config.seed * 0.03 + i * 1.13;
-    const shard = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1, 5), i % 2 === 0 ? materials.ice : materials.shadow);
-    const radius = (6 + (i % 3) * 1.7) * config.scale;
-    const height = (2.8 + (i % 4) * 0.85) * config.scale;
-    shard.position.set(Math.cos(angle) * radius, height / 2 + 0.2, Math.sin(angle) * radius);
-    shard.scale.set(1.2 * config.scale, height, 0.9 * config.scale);
-    shard.rotation.set(0.08, angle + Math.PI * 0.5, -0.08);
-    shard.castShadow = true;
-    shard.receiveShadow = true;
-    group.add(shard);
-  }
-
-  const y = terrainHeight(config.x, config.z);
-  group.position.set(config.x, y + 0.08, config.z);
+  const group = createModel("iceberg");
+  group.scale.setScalar(config.scale);
+  group.position.set(config.x, terrainHeight(config.x, config.z) + 0.08, config.z);
   group.rotation.y = config.rotation;
   addLevelObject(group);
-  addIceFloesAround(config, materials);
+  addIceFloesAround(config);
 }
 
 function addIceFloesAround(config, materials) {
-  const group = new THREE.Group();
-  const topGeometry = new THREE.CircleGeometry(1, 7);
-  const edgeGeometry = new THREE.CylinderGeometry(1, 1, 0.2, 7);
-
+  const matrices = [];
   for (let i = 0; i < config.floeCount; i += 1) {
     const angle = config.seed * 0.017 + i * 1.618;
     const ring = config.floeRadius * (0.55 + ((i * 19) % 41) / 100);
@@ -2478,69 +2198,26 @@ function addIceFloesAround(config, materials) {
     const z = config.z + Math.sin(angle) * ring * (0.68 + (i % 4) * 0.08);
     if (Math.abs(x) > halfWorld - 8 || Math.abs(z) > halfWorld - 8) continue;
     if (!isDryObjectSpot(x, z, 2.4) && !isWater(x, z, 3)) continue;
-
-    const y = terrainHeight(x, z) + 0.18;
-    const sx = 1.8 + (i % 5) * 0.62;
-    const sz = 0.85 + (i % 4) * 0.34;
-
-    const edge = new THREE.Mesh(edgeGeometry, materials.floeEdge);
-    edge.position.set(x, y - 0.08, z);
-    edge.scale.set(sx, 1, sz);
-    edge.rotation.y = angle + i * 0.22;
-    edge.castShadow = true;
-    edge.receiveShadow = true;
-
-    const top = new THREE.Mesh(topGeometry, materials.floeTop);
-    top.rotation.x = -Math.PI / 2;
-    top.rotation.z = angle + i * 0.31;
-    top.position.set(x, y + 0.04, z);
-    top.scale.set(sx, sz, 1);
-    top.receiveShadow = true;
-    group.add(edge, top);
+    tempObject.position.set(x, terrainHeight(x, z) + 0.18, z);
+    tempObject.rotation.set(0, angle + i * 0.22, 0);
+    tempObject.scale.set(1.8 + (i % 5) * 0.62, 1, 0.85 + (i % 4) * 0.34);
+    tempObject.updateMatrix(); matrices.push(tempObject.matrix.clone());
   }
-
-  addLevelObject(group);
+  addLevelObject(modelInstances("ice_floe", matrices));
 }
 
 function addSmallIceShard(x, z, scale, rotation, seed) {
-  const materials = createIceLandmarkMaterials();
   const spot = findDryObjectSpot(x, z, 4, seed);
-  const group = new THREE.Group();
-  for (let i = 0; i < 3; i += 1) {
-    const shard = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1, 5), i === 0 ? materials.highlight : materials.ice);
-    const height = (3.2 - i * 0.55) * scale;
-    shard.position.set((i - 1) * 0.85 * scale, height / 2, Math.sin(i) * 0.7 * scale);
-    shard.scale.set(1.05 * scale, height, 0.78 * scale);
-    shard.rotation.set(0.08, rotation + i * 0.55, -0.08);
-    shard.castShadow = true;
-    shard.receiveShadow = true;
-    group.add(shard);
-  }
+  const group = createModel("ice_shard");
+  group.scale.setScalar(scale);
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.1, spot.z);
   group.rotation.y = rotation;
   addLevelObject(group);
 }
 
 function addIceArch() {
-  const materials = createIceLandmarkMaterials();
   const spot = findDryObjectSpot(iceLandmarks.arch.x, iceLandmarks.arch.z, 7, 1040);
-  const group = new THREE.Group();
-  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-  [
-    [-2.6, 1.25, 0, 1.1, 2.5, 1.35, -0.18],
-    [2.55, 1.45, 0.15, 1.15, 2.9, 1.25, 0.2],
-    [0, 3.05, 0.1, 4.7, 0.9, 1.15, 0.04],
-    [-0.8, 3.68, -0.1, 2.2, 0.65, 1.0, -0.2],
-    [1.28, 3.58, 0.18, 1.7, 0.58, 0.85, 0.36]
-  ].forEach(([x, y, z, sx, sy, sz, rz], index) => {
-    const block = new THREE.Mesh(blockGeometry, index % 2 === 0 ? materials.ice : materials.highlight);
-    block.position.set(x, y, z);
-    block.scale.set(sx, sy, sz);
-    block.rotation.set(0.05 * index, 0.18 * index, rz);
-    block.castShadow = true;
-    block.receiveShadow = true;
-    group.add(block);
-  });
+  const group = createModel("ice_arch");
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.05, spot.z);
   group.rotation.y = 0.72;
   addLevelObject(group);
@@ -2572,7 +2249,7 @@ function addIceCrystalField() {
     crystal.scale.set(0.7, 1.6 + (i % 4) * 0.28, 0.7);
     crystal.rotation.set(i * 0.2, angle, i * 0.11);
     crystal.castShadow = true;
-    group.add(crystal);
+    group.add(modelForMesh(crystal, "ice_crystal"));
   }
   const glow = new THREE.Mesh(new THREE.CircleGeometry(8.2, 24), glowMaterial);
   glow.rotation.x = -Math.PI / 2;
@@ -2588,22 +2265,8 @@ function addIceCrystalField() {
 }
 
 function addBrokenIceWall() {
-  const materials = createIceLandmarkMaterials();
   const spot = findDryObjectSpot(iceLandmarks.brokenWall.x, iceLandmarks.brokenWall.z, 7, 1080);
-  const group = new THREE.Group();
-  const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-  for (let i = 0; i < 11; i += 1) {
-    if (i === 5) continue;
-    const x = (i - 5) * 1.45;
-    const height = 0.8 + (i % 4) * 0.42;
-    const block = new THREE.Mesh(blockGeometry, i % 3 === 0 ? materials.shadow : materials.ice);
-    block.position.set(x, height / 2, Math.sin(i * 1.7) * 0.55);
-    block.scale.set(1.12, height, 0.78 + (i % 2) * 0.3);
-    block.rotation.set(0.08 * Math.sin(i), i * 0.18, 0.12 * Math.cos(i));
-    block.castShadow = true;
-    block.receiveShadow = true;
-    group.add(block);
-  }
+  const group = createModel("ice_wall");
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.05, spot.z);
   group.rotation.y = -0.48;
   addLevelObject(group);
@@ -2614,42 +2277,21 @@ function addIsolatedIceSpire() {
 }
 
 function addSnowPines() {
-  const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.28, 1.5, 6);
-  const crownGeometry = new THREE.ConeGeometry(0.95, 2.2, 7);
-  const snowCapGeometry = new THREE.ConeGeometry(1.05, 0.75, 7);
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x2c231f, roughness: 0.88 });
-  const crownMaterial = new THREE.MeshStandardMaterial({ color: 0x103948, roughness: 0.92 });
-  const snowMaterial = new THREE.MeshStandardMaterial({ color: 0xe8fbff, roughness: 0.7 });
-  const group = new THREE.Group();
-
+  const matrices = [];
   for (let i = 0; i < 76; i += 1) {
-    const edgeAngle = i * 1.83;
+    const a = i * 1.83;
     const ring = i % 3 === 0 ? halfWorld - 18 - (i % 7) * 2 : 38 + (i % 11) * 3;
-    const x = Math.cos(edgeAngle) * ring + Math.sin(i * 0.7) * 3;
-    const z = Math.sin(edgeAngle) * ring + Math.cos(i * 0.9) * 3;
+    const x = Math.cos(a) * ring + Math.sin(i * 0.7) * 3;
+    const z = Math.sin(a) * ring + Math.cos(i * 0.9) * 3;
     if (!isDryObjectSpot(x, z, 4.5) || pastureAmount(x, z) > 0.45 || pathAmount(x, z) > 0.35) continue;
-    const y = terrainHeight(x, z);
-    const scale = 0.65 + (i % 5) * 0.08;
-
-    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.position.set(x, y + 0.72 * scale, z);
-    trunk.scale.setScalar(scale);
-    trunk.castShadow = true;
-
-    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
-    crown.position.set(x, y + 2.05 * scale, z);
-    crown.scale.setScalar(scale);
-    crown.castShadow = true;
-
-    const cap = new THREE.Mesh(snowCapGeometry, snowMaterial);
-    cap.position.set(x, y + 2.65 * scale, z);
-    cap.scale.set(scale * 0.92, scale, scale * 0.92);
-    cap.castShadow = true;
-
-    group.add(trunk, crown, cap);
+    const scale = (0.65 + (i % 5) * 0.08) * 0.67;
+    tempObject.position.set(x, terrainHeight(x, z), z);
+    tempObject.rotation.set(0, a, 0);
+    tempObject.scale.setScalar(scale);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
   }
-
-  addLevelObject(group);
+  addLevelObject(modelInstances("pine_snow", matrices));
 }
 
 function addIceCrystals() {
@@ -2670,7 +2312,7 @@ function addIceCrystals() {
     crystal.rotation.set(i * 0.2, i * 0.7, i * 0.12);
     crystal.castShadow = true;
     crystal.receiveShadow = true;
-    addLevelObject(crystal);
+    addLevelObject(modelForMesh(crystal, "ice_crystal"));
   }
 }
 
@@ -2684,54 +2326,18 @@ function addDesertDetails() {
 }
 
 function addDesertBoundaryBlocks() {
-  const blockMaterial = new THREE.MeshStandardMaterial({
-    color: 0xb8874d,
-    emissive: 0x2b1809,
-    emissiveIntensity: 0.12,
-    roughness: 0.94
-  });
-  const capMaterial = new THREE.MeshStandardMaterial({
-    color: 0xd1a15e,
-    emissive: 0x321b08,
-    emissiveIntensity: 0.11,
-    roughness: 0.9
-  });
-  const blockGeometry = new THREE.BoxGeometry(4.8, 1.0, 1.45);
-  const capGeometry = new THREE.BoxGeometry(3.2, 1.25, 1.6);
-  const blockMatrices = [];
-  const capMatrices = [];
-  const inset = 4.5;
-  const fenceHalf = halfWorld - inset;
-  const spacing = 7.2;
-  const sides = [
-    { start: [-fenceHalf, -fenceHalf], end: [fenceHalf, -fenceHalf], angle: 0 },
-    { start: [-fenceHalf, fenceHalf], end: [fenceHalf, fenceHalf], angle: 0 },
-    { start: [-fenceHalf, -fenceHalf], end: [-fenceHalf, fenceHalf], angle: Math.PI / 2 },
-    { start: [fenceHalf, -fenceHalf], end: [fenceHalf, fenceHalf], angle: Math.PI / 2 }
-  ];
-
-  sides.forEach((side, sideIndex) => {
-    const [x1, z1] = side.start;
-    const [x2, z2] = side.end;
-    const length = Math.hypot(x2 - x1, z2 - z1);
-    const count = Math.floor(length / spacing);
-    for (let i = 0; i <= count; i += 1) {
-      const t = i / count;
-      const x = THREE.MathUtils.lerp(x1, x2, t);
-      const z = THREE.MathUtils.lerp(z1, z2, t);
-      const isCap = i % 5 === 0;
-      tempObject.position.set(x, terrainHeight(x, z) + (isCap ? 0.62 : 0.5), z);
-      tempObject.rotation.set(0, side.angle + Math.sin((i + sideIndex) * 1.7) * 0.05, 0);
-      tempObject.scale.set(0.9 + ((i + sideIndex) % 3) * 0.08, 0.78 + (i % 2) * 0.16, 0.86);
-      tempObject.updateMatrix();
-      (isCap ? capMatrices : blockMatrices).push(tempObject.matrix.clone());
-    }
-  });
-
-  addLevelObject(
-    createStaticInstancedMesh(blockGeometry, blockMaterial, blockMatrices, true, true),
-    createStaticInstancedMesh(capGeometry, capMaterial, capMatrices, true, true)
-  );
+  addLevelObject(createNaturalBoundary("desert", halfWorld, terrainHeight));
+  const matrices = [];
+  for (let i = 0; i < 5; i++) {
+    const x = desertPyramid.x + 11 + Math.sin(i * 1.8) * 3;
+    const z = desertPyramid.z + (i - 2) * 3.2;
+    tempObject.position.set(x, terrainHeight(x, z) + 0.18, z);
+    tempObject.rotation.set(0.08 * Math.sin(i), i * 0.7, 0.12 * Math.cos(i));
+    tempObject.scale.set(0.45 + (i % 2) * 0.15, 0.55, 0.7);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
+  }
+  addLevelObject(modelInstances("sandstone_block", matrices));
 }
 
 function createStaticInstancedMesh(geometry, material, matrices, castShadow = false, receiveShadow = false) {
@@ -2746,104 +2352,12 @@ function createStaticInstancedMesh(geometry, material, matrices, castShadow = fa
 }
 
 function addPyramid() {
-  const x = desertPyramid.x;
-  const z = desertPyramid.z;
-  const baseY = terrainHeight(x, z);
-  const group = new THREE.Group();
-  const stoneTexture = createPyramidStoneTexture();
-  const sandStone = new THREE.MeshStandardMaterial({
-    color: 0xd9a65a,
-    map: stoneTexture,
-    emissive: 0x3f250c,
-    emissiveIntensity: 0.16,
-    roughness: 0.94
-  });
-  const darkStone = new THREE.MeshStandardMaterial({
-    color: 0x8a6536,
-    emissive: 0x1d1005,
-    emissiveIntensity: 0.08,
-    roughness: 0.96
-  });
-
-  const pyramid = new THREE.Mesh(new THREE.ConeGeometry(15.5, 21, 4), sandStone);
-  pyramid.rotation.y = Math.PI / 4;
-  pyramid.position.y = 10.5;
-  pyramid.castShadow = true;
-  pyramid.receiveShadow = true;
-
-  const foundation = new THREE.Mesh(new THREE.CylinderGeometry(15.9, 16.4, 0.55, 4), darkStone);
-  foundation.rotation.y = Math.PI / 4;
-  foundation.position.y = 0.02;
-  foundation.castShadow = true;
-  foundation.receiveShadow = true;
-
-  const entrance = new THREE.Mesh(new THREE.BoxGeometry(3.4, 3.1, 0.18), darkStone);
-  entrance.position.set(0, 2, -7.8);
-  entrance.rotation.x = -0.18;
-
-  group.add(foundation, pyramid, entrance);
-  group.position.set(x, baseY, z);
+  const { x, z } = desertPyramid;
+  const group = createModel("pyramid");
+  group.position.set(x, terrainHeight(x, z), z);
+  group.rotation.y = Math.PI;
   group.name = "desert-collision-pyramid";
   addLevelObject(group);
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(17, 48),
-    new THREE.MeshBasicMaterial({
-      color: 0x3a1b0c,
-      transparent: true,
-      opacity: 0.16,
-      depthWrite: false
-    })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.set(x, baseY + 0.08, z);
-  shadow.scale.set(1.15, 0.78, 1);
-  addLevelObject(shadow);
-}
-
-function createPyramidStoneTexture() {
-  const textureCanvas = document.createElement("canvas");
-  textureCanvas.width = 512;
-  textureCanvas.height = 512;
-  const context = textureCanvas.getContext("2d");
-  const gradient = context.createLinearGradient(0, 0, 0, textureCanvas.height);
-  gradient.addColorStop(0, "#e0b168");
-  gradient.addColorStop(1, "#bd8748");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, textureCanvas.width, textureCanvas.height);
-
-  context.strokeStyle = "rgba(99, 61, 25, 0.44)";
-  context.lineWidth = 3;
-  for (let row = 0; row < 15; row += 1) {
-    const y = 22 + row * 32 + Math.sin(row * 1.3) * 3;
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(textureCanvas.width, y + Math.sin(row * 0.8) * 3);
-    context.stroke();
-
-    const blockWidth = 54 + (row % 4) * 8;
-    const offset = row % 2 === 0 ? 0 : blockWidth * 0.48;
-    for (let x = -offset; x < textureCanvas.width; x += blockWidth) {
-      context.beginPath();
-      context.moveTo(x, y - 30);
-      context.lineTo(x + Math.sin((x + row) * 0.04) * 2, y - 2);
-      context.stroke();
-    }
-  }
-
-  context.fillStyle = "rgba(255, 225, 156, 0.12)";
-  for (let i = 0; i < 120; i += 1) {
-    const px = (i * 71) % textureCanvas.width;
-    const py = (i * 43) % textureCanvas.height;
-    context.fillRect(px, py, 2 + (i % 3), 1);
-  }
-
-  const texture = new THREE.CanvasTexture(textureCanvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(2.4, 2.1);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
 }
 
 function addDesertOases() {
@@ -2893,32 +2407,8 @@ function addDesertOases() {
 
 function addPalmTree(x, z, angle, scale = 1) {
   const spot = findDryObjectSpot(x, z, 2.5, Math.floor((x + z) * 3));
-  const group = new THREE.Group();
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x7b4a25, roughness: 0.9 });
-  const leafMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1f7d55,
-    emissive: 0x062415,
-    emissiveIntensity: 0.08,
-    roughness: 0.86
-  });
-
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 4.2, 7), trunkMaterial);
-  trunk.position.y = 2.1 * scale;
-  trunk.rotation.z = Math.sin(angle) * 0.16;
-  trunk.scale.set(scale, scale, scale);
-  trunk.castShadow = true;
-  group.add(trunk);
-
-  for (let i = 0; i < 7; i += 1) {
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.34, 3.5, 5), leafMaterial);
-    leaf.position.y = 4.25 * scale;
-    leaf.rotation.z = Math.PI / 2.25;
-    leaf.rotation.y = angle + (i / 7) * Math.PI * 2;
-    leaf.scale.set(scale, 0.58 * scale, scale);
-    leaf.castShadow = true;
-    group.add(leaf);
-  }
-
+  const group = createModel("palm");
+  group.scale.setScalar(scale);
   group.position.set(spot.x, terrainHeight(spot.x, spot.z), spot.z);
   group.rotation.y = angle;
   addLevelObject(group);
@@ -2933,102 +2423,29 @@ function addDesertCamp() {
 
 function addBedouinTent(site) {
   const spot = findDryObjectSpot(site.x, site.z, 6.5 * site.scale, site.seed);
-  const group = new THREE.Group();
-  const cloth = new THREE.MeshStandardMaterial({
-    color: site.cloth,
-    emissive: 0x241006,
-    roughness: 0.86
-  });
-  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x4d2c1c, roughness: 0.9 });
-  const rugMaterial = new THREE.MeshBasicMaterial({
-    color: 0x7c2c34,
-    transparent: true,
-    opacity: 0.86,
-    side: THREE.DoubleSide
-  });
-
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 3.4), rugMaterial);
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.y = 0.08;
-
-  const tent = new THREE.Mesh(new THREE.ConeGeometry(3.4, 3.3, 4), cloth);
-  tent.rotation.y = Math.PI / 4;
-  tent.scale.z = 0.62;
-  tent.position.y = 1.7;
-  tent.castShadow = true;
-  tent.receiveShadow = true;
-
-  for (const x of [-2.2, 2.2]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.7, 6), poleMaterial);
-    pole.position.set(x, 1.35, 0);
-    pole.castShadow = true;
-    group.add(pole);
-  }
-
-  const lamp = new THREE.Mesh(
-    new THREE.SphereGeometry(0.28, 12, 8),
-    new THREE.MeshBasicMaterial({ color: 0xffd67a })
-  );
-  lamp.position.set(0, 1.5, -2.2);
-  const glow = new THREE.PointLight(0xffa95c, 1.2, 13, 1.8);
-  glow.position.copy(lamp.position);
-
-  const shade = new THREE.Mesh(
-    new THREE.CircleGeometry(3.2, 22),
-    new THREE.MeshBasicMaterial({
-      color: 0x3a1b0c,
-      transparent: true,
-      opacity: 0.16,
-      depthWrite: false
-    })
-  );
-  shade.rotation.x = -Math.PI / 2;
-  shade.position.set(0.2, 0.045, 0.4);
-  shade.scale.set(1.45, 0.58, 1);
-
-  group.add(shade, rug, tent, lamp, glow);
+  const group = createModel("tent");
   group.scale.setScalar(site.scale);
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.04, spot.z);
-  group.rotation.y = site.rotation;
+  group.rotation.y = site.rotation + Math.PI;
+  const light = new THREE.PointLight(0xffa95c, 1.2, 13, 1.8);
+  light.position.set(0, 1.6, 2.3);
+  group.add(light);
   addLevelObject(group);
 }
 
 function addCacti() {
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x2d7a53,
-    emissive: 0x0a2116,
-    roughness: 0.92
-  });
-  const trunkGeometry = new THREE.CylinderGeometry(0.28, 0.34, 2.6, 7);
-  const armGeometry = new THREE.CylinderGeometry(0.16, 0.19, 1.25, 7);
-
+  const matrices = [];
   for (let i = 0; i < 46; i += 1) {
     const x = ((i * 43) % 150) - 75 + Math.sin(i * 0.7) * 3.2;
     const z = ((i * 59) % 150) - 75 + Math.cos(i * 1.2) * 3.2;
     if (!isDryObjectSpot(x, z, 4.8) || pastureAmount(x, z) > 0.66 || pathAmount(x, z) > 0.36) continue;
-    const scale = 0.72 + (i % 5) * 0.1;
-    const group = new THREE.Group();
-    const trunk = new THREE.Mesh(trunkGeometry, material);
-    trunk.position.y = 1.3 * scale;
-    trunk.scale.setScalar(scale);
-    trunk.castShadow = true;
-    group.add(trunk);
-
-    if (i % 3 !== 0) {
-      for (const side of [-1, 1]) {
-        const arm = new THREE.Mesh(armGeometry, material);
-        arm.position.set(side * 0.46 * scale, 1.55 * scale, 0);
-        arm.rotation.z = side * Math.PI / 2.4;
-        arm.scale.setScalar(scale);
-        arm.castShadow = true;
-        group.add(arm);
-      }
-    }
-
-    group.position.set(x, terrainHeight(x, z), z);
-    group.rotation.y = i * 0.37;
-    addLevelObject(group);
+    tempObject.position.set(x, terrainHeight(x, z), z);
+    tempObject.rotation.set(0, i * 0.37, 0);
+    tempObject.scale.setScalar(0.72 + (i % 5) * 0.1);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
   }
+  addLevelObject(modelInstances("cactus", matrices));
 }
 
 function addDryShrubs() {
@@ -3056,7 +2473,7 @@ function addDryShrubs() {
   shrubs.count = count;
   shrubs.castShadow = true;
   shrubs.receiveShadow = true;
-  addLevelObject(shrubs);
+  addLevelObject(modelForInstances(shrubs, "shrub"));
 }
 
 function addDesertMarkers() {
@@ -3074,7 +2491,7 @@ function addDesertMarkers() {
     marker.scale.set(1, 1, 0.72);
     marker.castShadow = true;
     marker.receiveShadow = true;
-    addLevelObject(marker);
+    addLevelObject(modelForMesh(marker, "desert_marker"));
   });
 }
 
@@ -3189,7 +2606,7 @@ function addShoreDetails() {
   reedMesh.castShadow = true;
   pebbleMesh.castShadow = true;
   pebbleMesh.receiveShadow = true;
-  addLevelObject(reedMesh, pebbleMesh);
+  addLevelObject(modelForInstances(reedMesh, "reed"), modelForInstances(pebbleMesh, "pebble"));
 }
 
 function addComposedShorelineClusters() {
@@ -3250,7 +2667,7 @@ function addComposedShorelineClusters() {
       rock.rotation.set(i * 0.27, cluster.angle + i * 0.5, i * 0.13);
       rock.castShadow = true;
       rock.receiveShadow = true;
-      addLevelObject(rock);
+      addLevelObject(modelForMesh(rock, "rock"));
     }
 
     for (let i = 0; i < cluster.reeds; i += 1) {
@@ -3264,41 +2681,9 @@ function addComposedShorelineClusters() {
       reed.rotation.set(0.08 * Math.sin(i), fan, 0.1 * Math.cos(i));
       reed.scale.set(scale, scale, scale);
       reed.castShadow = true;
-      addLevelObject(reed);
+      addLevelObject(modelForMesh(reed, "reed"));
     }
   });
-}
-
-function addMeadowPatches() {
-  const patchMaterial = new THREE.MeshBasicMaterial({
-    color: 0x345f36,
-    transparent: true,
-    opacity: 0.09,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const mossMaterial = new THREE.MeshBasicMaterial({
-    color: 0x566f44,
-    transparent: true,
-    opacity: 0.075,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-  const geometry = new THREE.CircleGeometry(1, 22);
-
-  for (let i = 0; i < 12; i += 1) {
-    const x = ((i * 31) % 136) - 68 + Math.sin(i * 0.8) * 5.5;
-    const z = ((i * 47) % 138) - 69 + Math.cos(i * 1.1) * 5.5;
-    if (!isDryObjectSpot(x, z, 7) || pathAmount(x, z) > 0.32) continue;
-    if (pastureAmount(x, z) < 0.18 && shoreAmount(x, z) < 0.1 && Math.abs(x) < halfWorld - 22 && Math.abs(z) < halfWorld - 22) continue;
-
-    const patch = new THREE.Mesh(geometry, i % 3 === 0 ? mossMaterial : patchMaterial);
-    patch.rotation.x = -Math.PI / 2;
-    patch.rotation.z = i * 0.37;
-    patch.position.set(x, terrainHeight(x, z) + 0.055, z);
-    patch.scale.set(3.2 + (i % 5) * 0.72, 1.55 + (i % 4) * 0.55, 1);
-    addLevelObject(patch);
-  }
 }
 
 function addBoundaryFence() {
@@ -3342,8 +2727,8 @@ function createFenceGroup(lines, postGeometry, railGeometry, material, options) 
   const group = new THREE.Group();
   const posts = createStaticInstancedMesh(postGeometry, material, postMatrices, true, true);
   const rails = createStaticInstancedMesh(railGeometry, material, railMatrices, true, true);
-  if (posts) group.add(posts);
-  if (rails) group.add(rails);
+  if (posts) group.add(modelForInstances(posts, "fence_post"));
+  if (rails) group.add(modelForInstances(rails, "fence_rail"));
   return group;
 }
 
@@ -3397,186 +2782,20 @@ function addFarmDetails() {
 
 function addGrainSilo() {
   const { x, z } = farmLandmarks.silo;
-  const group = new THREE.Group();
-  const metalMaterial = new THREE.MeshStandardMaterial({
-    color: 0xb7b5a7,
-    emissive: 0x10100b,
-    roughness: 0.62,
-    metalness: 0.18,
-    flatShading: true
-  });
-  const roofMaterial = new THREE.MeshStandardMaterial({
-    color: 0x8c7a4c,
-    emissive: 0x161005,
-    roughness: 0.78,
-    metalness: 0.08,
-    flatShading: true
-  });
-  const bandMaterial = new THREE.MeshStandardMaterial({ color: 0x4c4335, roughness: 0.82 });
-  const ladderMaterial = new THREE.MeshStandardMaterial({ color: 0x2d241d, roughness: 0.88 });
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x07100b,
-    transparent: true,
-    opacity: 0.2,
-    depthWrite: false
-  });
-
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(6.6, 18), shadowMaterial);
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.04;
-
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(3.15, 3.35, 12.6, 14), metalMaterial);
-  body.position.y = 6.3;
-  body.castShadow = true;
-  body.receiveShadow = true;
-
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.95, 2.25, 14), roofMaterial);
-  roof.position.y = 13.55;
-  roof.castShadow = true;
-
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.55, 8), bandMaterial);
-  cap.position.y = 14.95;
-  cap.castShadow = true;
-
-  [2.2, 6.1, 9.95].forEach((height) => {
-    const band = new THREE.Mesh(new THREE.TorusGeometry(3.23, 0.055, 6, 28), bandMaterial);
-    band.position.y = height;
-    band.rotation.x = Math.PI / 2;
-    band.castShadow = true;
-    group.add(band);
-  });
-
-  for (let i = 0; i < 5; i += 1) {
-    const rung = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.08, 0.08), ladderMaterial);
-    rung.position.set(-2.35, 3.1 + i * 1.28, -2.42);
-    rung.rotation.y = -0.18;
-    rung.castShadow = true;
-    group.add(rung);
-  }
-
-  const ladderLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 6.8, 0.08), ladderMaterial);
-  ladderLeft.position.set(-2.82, 5.6, -2.38);
-  ladderLeft.rotation.y = -0.18;
-  const ladderRight = ladderLeft.clone();
-  ladderRight.position.x = -1.88;
-  group.add(ladderLeft, ladderRight);
-
-  const chute = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 5.6, 7), bandMaterial);
-  chute.position.set(3.06, 2.8, 0.7);
-  chute.rotation.z = -0.38;
-  chute.castShadow = true;
-
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd37a }));
-  lamp.position.set(-2.1, 2.2, -2.8);
-  const glow = new THREE.PointLight(0xffbd66, 0.65, 9, 1.9);
-  glow.position.copy(lamp.position);
-
-  group.add(shadow, body, roof, cap, chute, lamp, glow);
-  group.rotation.y = -0.38;
+  const group = createModel("silo");
   group.position.set(x, terrainHeight(x, z) + 0.02, z);
+  group.rotation.y = -0.38 + Math.PI;
   addLevelObject(group);
 }
 
 function addWindmill() {
   const { x, z, rotation } = farmLandmarks.windmill;
-  const group = new THREE.Group();
-  const foundationMaterial = new THREE.MeshStandardMaterial({ color: 0x3b2a20, roughness: 0.9 });
-  const plasterMaterial = new THREE.MeshStandardMaterial({
-    color: 0xe1ddca,
-    emissive: 0x202720,
-    emissiveIntensity: 0.14,
-    roughness: 0.72,
-    flatShading: true
-  });
-  const moonSideMaterial = new THREE.MeshStandardMaterial({
-    color: 0xc1ccd0,
-    emissive: 0x10253a,
-    emissiveIntensity: 0.2,
-    roughness: 0.68,
-    flatShading: true
-  });
-  const beamMaterial = new THREE.MeshStandardMaterial({ color: 0x5a3d2e, roughness: 0.84 });
-  const bladeSailMaterial = new THREE.MeshStandardMaterial({
-    color: 0xdcd4ba,
-    emissive: 0x1c1c13,
-    emissiveIntensity: 0.12,
-    roughness: 0.78,
-    flatShading: true
-  });
-  const roofMaterial = new THREE.MeshStandardMaterial({
-    color: 0xc2a04a,
-    emissive: 0x1b1205,
-    roughness: 0.9,
-    flatShading: true
-  });
-  const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x44281d, roughness: 0.82 });
-  const windowMaterial = new THREE.MeshBasicMaterial({ color: 0xffcf77 });
-
-  const foundation = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 5.4, 1.05, 8), foundationMaterial);
-  foundation.position.y = 0.55;
-  foundation.castShadow = true;
-  foundation.receiveShadow = true;
-
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.25, 3.85, 12.4, 9), plasterMaterial);
-  tower.position.y = 6.7;
-  tower.castShadow = true;
-  tower.receiveShadow = true;
-
-  const moonlitSide = new THREE.Mesh(new THREE.BoxGeometry(0.09, 9.2, 2.5), moonSideMaterial);
-  moonlitSide.position.set(-2.26, 6.2, -0.2);
-  moonlitSide.rotation.y = 0.09;
-
-  const lowerBand = new THREE.Mesh(new THREE.CylinderGeometry(3.95, 4.2, 0.42, 9), beamMaterial);
-  lowerBand.position.y = 1.42;
-  const upperBand = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.7, 0.32, 9), beamMaterial);
-  upperBand.position.y = 10.7;
-
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.25, 2.45, 8), roofMaterial);
-  roof.position.y = 14.1;
-  roof.castShadow = true;
-
-  const door = new THREE.Mesh(new THREE.BoxGeometry(1.35, 2.25, 0.16), doorMaterial);
-  door.position.set(0, 1.95, -3.86);
-  const window = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.14), windowMaterial);
-  window.position.set(1.28, 7.9, -2.45);
-  const windowGlow = new THREE.PointLight(0xffc46a, 0.72, 10, 1.85);
-  windowGlow.position.copy(window.position);
-  windowGlow.intensity = 1.08;
-  windowGlow.distance = 11;
-
-  const coolRim = new THREE.PointLight(0x8fcaff, 0.48, 18, 2.1);
-  coolRim.position.set(-4.6, 8.2, 3.8);
-  coolRim.castShadow = false;
-  const moonFill = new THREE.PointLight(0xb8d8ff, 0.62, 24, 2.2);
-  moonFill.position.set(-6.4, 11.2, 4.8);
-  moonFill.castShadow = false;
-
-  const rotor = new THREE.Group();
-  rotor.position.set(0, 11.65, -2.92);
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.64, 10), beamMaterial);
-  hub.rotation.x = Math.PI / 2;
-  hub.castShadow = true;
-  rotor.add(hub);
-
-  for (let i = 0; i < 4; i += 1) {
-    const blade = new THREE.Group();
-    blade.rotation.z = i * Math.PI * 0.5;
-    const spar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 6.6, 0.18), beamMaterial);
-    spar.position.y = 3.25;
-    spar.castShadow = true;
-    const sail = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.8, 0.1), bladeSailMaterial);
-    sail.position.set(0.36, 4.45, 0);
-    sail.rotation.z = -0.12;
-    sail.castShadow = true;
-    blade.add(spar, sail);
-    rotor.add(blade);
-  }
-
+  const group = createModel("windmill");
+  const rotor = group.getObjectByName("joint_rotor");
   rotor.userData.rotationSpeed = 0.56;
   windmillRotors.push(rotor);
-  group.add(foundation, tower, moonlitSide, lowerBand, upperBand, roof, door, window, windowGlow, coolRim, moonFill, rotor);
-  group.rotation.y = rotation;
   group.position.set(x, terrainHeight(x, z) + 0.03, z);
+  group.rotation.y = rotation + Math.PI;
   addLevelObject(group);
 }
 
@@ -3631,75 +2850,21 @@ function addRectFence(centerX, centerZ, width, depth, spacing) {
 
 function addBarn(x, z, rotationY = 0) {
   const spot = findDryObjectSpot(x, z, 11, 210);
-  const group = new THREE.Group();
-  const wallMaterial = new THREE.MeshStandardMaterial({
-    color: 0x7a2e2d,
-    emissive: 0x170706,
-    roughness: 0.74
-  });
-  const roofMaterial = new THREE.MeshStandardMaterial({
-    color: 0x232737,
-    roughness: 0.82,
-    metalness: 0.06
-  });
-  const trimMaterial = new THREE.MeshStandardMaterial({ color: 0xd7c9a1, roughness: 0.7 });
-  const foundationMaterial = new THREE.MeshStandardMaterial({ color: 0x5a4b3c, roughness: 0.94 });
-
-  const foundation = new THREE.Mesh(new THREE.BoxGeometry(10.6, 0.12, 8.2), foundationMaterial);
-  foundation.position.y = 0.06;
-  foundation.receiveShadow = true;
-
-  const body = new THREE.Mesh(new THREE.BoxGeometry(8.5, 4.8, 6.8), wallMaterial);
-  body.position.y = 2.4;
-  body.castShadow = true;
-  body.receiveShadow = true;
-
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(5.8, 3.2, 4), roofMaterial);
-  roof.position.y = 5.3;
-  roof.rotation.y = Math.PI / 4;
-  roof.scale.z = 0.72;
-  roof.castShadow = true;
-
-  const door = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.8, 0.12), trimMaterial);
-  door.position.set(0, 1.45, -3.45);
-
-  const loft = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1, 0.13), trimMaterial);
-  loft.position.set(0, 3.72, -3.46);
-
-  const warmWindow = new THREE.Mesh(
-    new THREE.BoxGeometry(0.9, 0.64, 0.14),
-    new THREE.MeshBasicMaterial({ color: 0xffd27a })
-  );
-  warmWindow.position.set(-2.75, 2.65, -3.47);
-
-  group.add(foundation, body, roof, door, loft, warmWindow);
-  group.rotation.y = rotationY;
+  const group = createModel("barn");
   group.position.set(spot.x, terrainHeight(spot.x, spot.z) + 0.02, spot.z);
+  group.rotation.y = rotationY + Math.PI;
   addLevelObject(group);
 }
 
 function addFarmLanterns() {
-  const postMaterial = new THREE.MeshStandardMaterial({ color: 0x3d2a1a, roughness: 0.82 });
-  const lampMaterial = new THREE.MeshBasicMaterial({ color: 0xffc46a });
-
-  [
-    [39, 45],
-    [54, 43],
-    [-64, 54],
-    [11, 30],
-    [-34, 27]
-  ].forEach(([x, z], index) => {
+  [[39,45],[54,43],[-64,54],[11,30],[-34,27]].forEach(([x,z], index) => {
     const spot = findDryObjectSpot(x, z, 3.5, 240 + index);
-    const group = new THREE.Group();
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.4, 6), postMaterial);
-    post.position.y = 1.2;
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), lampMaterial);
-    lamp.position.y = 2.48;
-    const glow = new THREE.PointLight(0xffb45e, 1.25, 14, 1.9);
-    glow.position.y = 2.35;
-    group.add(post, lamp, glow);
+    const group = createModel("lantern");
     group.position.set(spot.x, terrainHeight(spot.x, spot.z), spot.z);
     group.rotation.y = index * 0.4;
+    const light = new THREE.PointLight(0xffb45e, 1.25, 14, 1.9);
+    light.position.y = 2.55;
+    group.add(light);
     addLevelObject(group);
   });
 }
@@ -3739,7 +2904,7 @@ function addHayBales() {
     matrices.push(tempObject.matrix.clone());
   });
 
-  addLevelObject(createStaticInstancedMesh(geometry, material, matrices, true, true));
+  addLevelObject(modelForInstances(createStaticInstancedMesh(geometry, material, matrices, true, true), "hay_bale"));
 }
 
 function addPathStones() {
@@ -3775,7 +2940,7 @@ function addPathStones() {
     matrices.push(tempObject.matrix.clone());
   });
 
-  addLevelObject(createStaticInstancedMesh(geometry, material, matrices, false, true));
+  addLevelObject(modelForInstances(createStaticInstancedMesh(geometry, material, matrices, false, true), "path_stone"));
 }
 
 function addGrassClumps() {
@@ -3805,27 +2970,12 @@ function addGrassClumps() {
   clumps.count = count;
   clumps.castShadow = true;
   clumps.receiveShadow = true;
-  addLevelObject(clumps);
+  addLevelObject(modelForInstances(clumps, "grass"));
 }
 
 function addTrees() {
-  const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.32, 1.8, 6);
-  const lowerCrownGeometry = new THREE.ConeGeometry(1.28, 2.35, 7);
-  const midCrownGeometry = new THREE.ConeGeometry(1.02, 2.2, 7);
-  const topCrownGeometry = new THREE.ConeGeometry(0.74, 1.85, 7);
-  const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.9 });
-  const crownMaterial = new THREE.MeshStandardMaterial({
-    color: 0x103526,
-    emissive: 0x020a07,
-    emissiveIntensity: 0.08,
-    roughness: 0.96
-  });
+  const matrices = [];
   const maxTrees = 112;
-  const trunkMesh = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, maxTrees);
-  const lowerCrownMesh = new THREE.InstancedMesh(lowerCrownGeometry, crownMaterial, maxTrees);
-  const midCrownMesh = new THREE.InstancedMesh(midCrownGeometry, crownMaterial, maxTrees);
-  const topCrownMesh = new THREE.InstancedMesh(topCrownGeometry, crownMaterial, maxTrees);
-  let count = 0;
   const clusterCenters = [
     [-68, -60, 14, 15],
     [-70, 5, 13, 15],
@@ -3859,41 +3009,13 @@ function addTrees() {
     const scale = 0.78 + ((i * 13) % 9) * 0.07;
     const heightScale = 0.88 + (i % 4) * 0.07;
     const y = terrainHeight(x, z);
-    tempObject.position.set(x, y + 0.86 * scale * heightScale, z);
+    tempObject.position.set(x, y, z);
     tempObject.rotation.set(0, angle, 0);
     tempObject.scale.set(scale, scale * heightScale, scale);
     tempObject.updateMatrix();
-    trunkMesh.setMatrixAt(count, tempObject.matrix);
-
-    tempObject.position.set(x, y + 2.25 * scale * heightScale, z);
-    tempObject.rotation.set(0, angle, 0);
-    tempObject.scale.set(scale, scale * heightScale, scale);
-    tempObject.updateMatrix();
-    lowerCrownMesh.setMatrixAt(count, tempObject.matrix);
-
-    tempObject.position.set(x, y + 3.15 * scale * heightScale, z);
-    tempObject.rotation.set(0, angle + 0.2, 0);
-    tempObject.scale.set(scale * 0.94, scale * heightScale, scale * 0.94);
-    tempObject.updateMatrix();
-    midCrownMesh.setMatrixAt(count, tempObject.matrix);
-
-    tempObject.position.set(x, y + 3.9 * scale * heightScale, z);
-    tempObject.rotation.set(0, angle - 0.17, 0);
-    tempObject.scale.set(scale * 0.88, scale * heightScale, scale * 0.88);
-    tempObject.updateMatrix();
-    topCrownMesh.setMatrixAt(count, tempObject.matrix);
-    count += 1;
+    matrices.push(tempObject.matrix.clone());
   }
-
-  trunkMesh.count = count;
-  lowerCrownMesh.count = count;
-  midCrownMesh.count = count;
-  topCrownMesh.count = count;
-  trunkMesh.castShadow = true;
-  lowerCrownMesh.castShadow = true;
-  midCrownMesh.castShadow = true;
-  topCrownMesh.castShadow = true;
-  addLevelObject(trunkMesh, lowerCrownMesh, midCrownMesh, topCrownMesh);
+  addLevelObject(modelInstances("pine", matrices));
 }
 
 function addRocks() {
@@ -3939,7 +3061,7 @@ function addRocks() {
   rockMesh.count = count;
   rockMesh.castShadow = true;
   rockMesh.receiveShadow = true;
-  addLevelObject(rockMesh);
+  addLevelObject(modelForInstances(rockMesh, "rock"));
 }
 
 function addCropCircles() {
@@ -3965,25 +3087,18 @@ function addCropCircles() {
 }
 
 function addClouds() {
-  const cloudColor = activeLevelId === "desert" ? 0x2a1b2d : activeLevelId === "ice" ? 0x12304b : 0x142943;
-  const emissiveColor = activeLevelId === "desert" ? 0x120711 : activeLevelId === "ice" ? 0x031525 : 0x061020;
-  const material = new THREE.MeshStandardMaterial({
-    color: cloudColor,
-    emissive: emissiveColor,
-    roughness: 0.82,
-    transparent: true,
-    opacity: activeLevelId === "farm" ? 0.72 : 0.58
-  });
-
-  const cloudCount = activeLevelId === "farm" ? 12 : 8;
-  for (let i = 0; i < cloudCount; i += 1) {
-    const cloud = new THREE.Group();
-    for (let puff = 0; puff < 5; puff += 1) {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.6 + puff * 0.2, 10, 8), material);
-      mesh.position.set((puff - 2) * 1.45, Math.sin(puff) * 0.42, Math.cos(puff) * 0.6);
-      mesh.scale.set(1.5, 0.62, 0.95);
-      cloud.add(mesh);
-    }
+  const count = activeLevelId === "farm" ? 12 : 8;
+  for (let i = 0; i < count; i += 1) {
+    const cloud = createModel("cloud");
+    cloud.traverse((mesh) => {
+      if (!mesh.isMesh) return;
+      mesh.material = mesh.material.clone();
+      mesh.material.color.setHex(activeLevelId === "desert" ? 0x2a1b2d : activeLevelId === "ice" ? 0x12304b : 0x142943);
+      mesh.material.transparent = true;
+      mesh.material.opacity = activeLevelId === "farm" ? 0.72 : 0.58;
+      mesh.material.depthWrite = false;
+      mesh.castShadow = false;
+    });
     cloud.position.set(((i * 29) % 146) - 73, 22 + (i % 4) * 2.8, ((i * 43) % 148) - 74);
     cloud.rotation.y = i * 0.33;
     addLevelObject(cloud);
@@ -4287,14 +3402,6 @@ function collectibleBaseHeight(type, x, z) {
   return terrainHeight(x, z);
 }
 
-function animalBodyGeometry(width, height, depth) {
-  const beveled = new RoundedBoxGeometry(width, height, depth, 1, 0.1);
-  // Indexed geometry keeps bevelled bodies in the existing material batches.
-  const geometry = mergeVertices(beveled);
-  beveled.dispose();
-  return geometry;
-}
-
 function createAnimal(index) {
   const animal = activeLevelId === "desert"
     ? createCamel(index)
@@ -4306,138 +3413,14 @@ function createAnimal(index) {
 }
 
 function createCow(index) {
-  const group = new THREE.Group();
-  const white = new THREE.MeshStandardMaterial({
-    color: 0xe8e1cf,
-    emissive: 0x121212,
-    roughness: 0.78
-  });
-  const black = new THREE.MeshStandardMaterial({ color: 0x171a1a, roughness: 0.78 });
-  const pink = new THREE.MeshStandardMaterial({ color: 0xd98791, roughness: 0.65 });
-
-  const body = new THREE.Mesh(animalBodyGeometry(1.8, 0.85, 0.72), white);
-  body.position.y = 0.92;
-  body.castShadow = true;
-
-  const head = new THREE.Mesh(animalBodyGeometry(0.65, 0.58, 0.58), white);
-  head.position.set(1.12, 1.08, 0);
-  head.castShadow = true;
-
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.25, 0.45), pink);
-  snout.position.set(1.52, 1.02, 0);
-
-  const spotMaterial = index % 2 === 0
-    ? black
-    : new THREE.MeshStandardMaterial({ color: 0x4f3d31, roughness: 0.8 });
-  [
-    [-0.36, 1.15, 0.38],
-    [0.34, 0.86, -0.38],
-    [0.08, 1.28, 0.39]
-  ].forEach(([x, y, z]) => {
-    const spot = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 0.28), spotMaterial);
-    spot.position.set(x, y, z);
-    group.add(spot);
-  });
-
-  const eyeMaterial = new THREE.MeshStandardMaterial({
-    color: 0x9ffcff,
-    emissive: 0x55e9ff,
-    emissiveIntensity: 0.8
-  });
-  for (const z of [-0.16, 0.16]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), eyeMaterial);
-    eye.position.set(1.47, 1.15, z);
-    group.add(eye);
-  }
-
-  const legGeometry = new THREE.BoxGeometry(0.22, 0.72, 0.22);
-  for (const x of [-0.62, 0.56]) {
-    for (const z of [-0.24, 0.24]) {
-      const leg = new THREE.Mesh(legGeometry, black);
-      leg.position.set(x, 0.36, z);
-      leg.castShadow = true;
-      group.add(leg);
-    }
-  }
-
-  const hornGeometry = new THREE.ConeGeometry(0.08, 0.36, 8);
-  for (const z of [-0.24, 0.24]) {
-    const horn = new THREE.Mesh(hornGeometry, new THREE.MeshStandardMaterial({ color: 0xd8cb94 }));
-    horn.position.set(1.28, 1.46, z);
-    horn.rotation.z = -Math.PI / 2.8;
-    group.add(horn);
-  }
-
-  for (const z of [-0.38, 0.38]) {
-    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.25), white);
-    ear.position.set(1.03, 1.3, z);
-    ear.rotation.x = Math.sign(z) * 0.28;
-    ear.castShadow = true;
-    group.add(ear);
-  }
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.1), black);
-  tail.position.set(-0.96, 0.83, 0);
-  tail.rotation.z = -0.28;
-  tail.castShadow = true;
-  group.add(body, head, snout, tail);
+  const group = createModel("cow");
   group.scale.setScalar(1.2);
   return group;
 }
 
 function createCamel(index) {
-  const group = new THREE.Group();
-  const coat = new THREE.MeshStandardMaterial({
-    color: index % 2 === 0 ? 0xc89455 : 0xb98047,
-    emissive: 0x241005,
-    roughness: 0.86
-  });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.86 });
-  const saddle = new THREE.MeshStandardMaterial({ color: 0x7d2f35, roughness: 0.74 });
-
-  const body = new THREE.Mesh(animalBodyGeometry(2.05, 0.82, 0.64), coat);
-  body.position.y = 1.05;
-  body.castShadow = true;
-
-  const hump = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.86, 4), coat);
-  hump.position.set(-0.28, 1.6, 0);
-  hump.rotation.y = Math.PI / 4;
-  hump.scale.z = 0.72;
-  hump.castShadow = true;
-
-  const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.86, 4, 8), coat);
-  neck.position.set(0.98, 1.55, 0);
-  neck.rotation.z = -0.44;
-  neck.castShadow = true;
-
-  const head = new THREE.Mesh(animalBodyGeometry(0.58, 0.44, 0.42), coat);
-  head.position.set(1.38, 1.86, 0);
-  head.castShadow = true;
-
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.34), dark);
-  snout.position.set(1.74, 1.8, 0);
-
-  const saddleBlanket = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.09, 0.72), saddle);
-  saddleBlanket.position.set(-0.22, 1.5, 0);
-
-  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x061315 });
-  for (const z of [-0.13, 0.13]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), eyeMaterial);
-    eye.position.set(1.68, 1.94, z);
-    group.add(eye);
-  }
-
-  const legGeometry = new THREE.CapsuleGeometry(0.11, 0.68, 4, 8);
-  for (const x of [-0.64, 0.54]) {
-    for (const z of [-0.22, 0.22]) {
-      const leg = new THREE.Mesh(legGeometry, dark);
-      leg.position.set(x, 0.48, z);
-      leg.castShadow = true;
-      group.add(leg);
-    }
-  }
-
-  group.add(body, hump, neck, head, snout, saddleBlanket);
-  group.scale.setScalar(1.22);
+  const group = createModel("camel");
+  group.scale.setScalar(1.12);
   return group;
 }
 
@@ -4452,171 +3435,19 @@ function createHumanForLevel() {
 }
 
 function createBonusHuman() {
-  const group = new THREE.Group();
-  const pants = new THREE.MeshStandardMaterial({ color: 0x1e3d85, roughness: 0.78 });
-  const shirt = new THREE.MeshStandardMaterial({ color: 0xb43937, roughness: 0.72 });
-  const skin = new THREE.MeshStandardMaterial({ color: 0xe2a875, roughness: 0.68 });
-  const hat = new THREE.MeshStandardMaterial({ color: 0x1a1818, roughness: 0.85 });
-
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.9, 5, 12), shirt);
-  body.position.y = 1.05;
-  body.rotation.z = 0.28;
-  body.castShadow = true;
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), skin);
-  head.position.set(0.18, 1.78, 0);
-  head.castShadow = true;
-
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.18, 12), hat);
-  cap.position.set(0.18, 2.02, 0);
-  cap.rotation.z = 0.28;
-
-  const legGeometry = new THREE.CapsuleGeometry(0.12, 0.52, 4, 8);
-  [-0.15, 0.18].forEach((x, index) => {
-    const leg = new THREE.Mesh(legGeometry, pants);
-    leg.position.set(x, 0.36, 0);
-    leg.rotation.z = index === 0 ? 0.35 : -0.18;
-    leg.castShadow = true;
-    group.add(leg);
-  });
-
-  const bottle = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.07, 0.07, 0.45, 10),
-    new THREE.MeshStandardMaterial({
-      color: 0x1f7f55,
-      emissive: 0x0f5f3b,
-      emissiveIntensity: 0.35,
-      roughness: 0.44,
-      metalness: 0.08
-    })
-  );
-  bottle.position.set(-0.55, 1.13, 0.1);
-  bottle.rotation.z = 1.0;
-
-  const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.48, 14, 10),
-    new THREE.MeshBasicMaterial({
-      color: 0xff77dd,
-      transparent: true,
-      opacity: 0.24,
-      depthWrite: false
-    })
-  );
-  glow.position.set(0.1, 1.36, 0);
-
-  group.add(body, head, cap, bottle, glow);
+  const group = createModel("farmer");
   group.scale.setScalar(1.2);
   return group;
 }
 
 function createDesertHuman() {
-  const group = new THREE.Group();
-  const robe = new THREE.MeshStandardMaterial({ color: 0xd6c28a, roughness: 0.82 });
-  const scarf = new THREE.MeshStandardMaterial({ color: 0x497a87, roughness: 0.74 });
-  const skin = new THREE.MeshStandardMaterial({ color: 0xd99a6c, roughness: 0.68 });
-  const boots = new THREE.MeshStandardMaterial({ color: 0x3b2618, roughness: 0.86 });
-
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.95, 5, 12), robe);
-  body.position.y = 1.08;
-  body.rotation.z = -0.12;
-  body.castShadow = true;
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), skin);
-  head.position.set(-0.08, 1.82, 0);
-  head.castShadow = true;
-
-  const turban = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.075, 8, 18), scarf);
-  turban.position.set(-0.08, 2.04, 0);
-  turban.rotation.x = Math.PI / 2;
-
-  const scarfTail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.52, 0.08), scarf);
-  scarfTail.position.set(-0.38, 1.78, -0.04);
-  scarfTail.rotation.z = 0.28;
-
-  const legGeometry = new THREE.CapsuleGeometry(0.11, 0.5, 4, 8);
-  [-0.14, 0.16].forEach((x, index) => {
-    const leg = new THREE.Mesh(legGeometry, boots);
-    leg.position.set(x, 0.34, 0);
-    leg.rotation.z = index === 0 ? 0.18 : -0.2;
-    leg.castShadow = true;
-    group.add(leg);
-  });
-
-  const canteen = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.13, 0.13, 0.18, 10),
-    new THREE.MeshStandardMaterial({ color: 0x6a4d34, roughness: 0.7 })
-  );
-  canteen.position.set(0.52, 1.02, 0.12);
-  canteen.rotation.x = Math.PI / 2;
-
-  const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.48, 14, 10),
-    new THREE.MeshBasicMaterial({
-      color: 0xff77dd,
-      transparent: true,
-      opacity: 0.24,
-      depthWrite: false
-    })
-  );
-  glow.position.set(0.02, 1.36, 0);
-
-  group.add(body, head, turban, scarfTail, canteen, glow);
+  const group = createModel("traveler");
   group.scale.setScalar(1.2);
   return group;
 }
 
 function createIceHuman() {
-  const group = new THREE.Group();
-  const suit = new THREE.MeshStandardMaterial({ color: 0xd94c58, roughness: 0.78 });
-  const pants = new THREE.MeshStandardMaterial({ color: 0x24344f, roughness: 0.78 });
-  const fur = new THREE.MeshStandardMaterial({ color: 0xe8f4ef, roughness: 0.72 });
-  const skin = new THREE.MeshStandardMaterial({ color: 0xd99a6c, roughness: 0.68 });
-  const visor = new THREE.MeshBasicMaterial({ color: 0x9ffcff });
-
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.92, 5, 12), suit);
-  body.position.y = 1.06;
-  body.rotation.z = 0.12;
-  body.castShadow = true;
-
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 10), fur);
-  hood.position.set(0.08, 1.82, 0);
-  hood.scale.set(1, 1.05, 0.92);
-  hood.castShadow = true;
-
-  const face = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 8), skin);
-  face.position.set(0.22, 1.8, 0);
-  face.scale.set(0.7, 0.72, 0.64);
-
-  const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.34), visor);
-  goggles.position.set(0.38, 1.86, 0);
-
-  const legGeometry = new THREE.CapsuleGeometry(0.11, 0.5, 4, 8);
-  [-0.14, 0.16].forEach((x, index) => {
-    const leg = new THREE.Mesh(legGeometry, pants);
-    leg.position.set(x, 0.34, 0);
-    leg.rotation.z = index === 0 ? 0.12 : -0.22;
-    leg.castShadow = true;
-    group.add(leg);
-  });
-
-  const beacon = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 12, 8),
-    new THREE.MeshBasicMaterial({ color: 0xff77dd })
-  );
-  beacon.position.set(-0.42, 1.35, 0.12);
-
-  const glow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.48, 14, 10),
-    new THREE.MeshBasicMaterial({
-      color: 0xff77dd,
-      transparent: true,
-      opacity: 0.24,
-      depthWrite: false
-    })
-  );
-  glow.position.set(0.02, 1.36, 0);
-
-  group.add(body, hood, face, goggles, beacon, glow);
+  const group = createModel("explorer");
   group.scale.setScalar(1.2);
   return group;
 }
@@ -4796,33 +3627,10 @@ function maxTerrainHeightAround(x, z, radius) {
 
 function createEnergyCore() {
   const group = new THREE.Group();
-  const crystal = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.72, 0),
-    new THREE.MeshStandardMaterial({
-      color: 0x6ffff2,
-      emissive: 0x21d8cb,
-      emissiveIntensity: 0.58,
-      roughness: 0.18,
-      metalness: 0.08
-    })
-  );
-  crystal.castShadow = true;
-
-  const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(0.98, 0.04, 8, 28),
-    new THREE.MeshBasicMaterial({ color: 0xbffff8, transparent: true, opacity: 0.48 })
-  );
+  const model = createModel("energy_core");
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.03, 0.025, 4, 16), new THREE.MeshBasicMaterial({ color: 0x99ffda, transparent: true, opacity: 0.35, depthWrite: false }));
   ring.rotation.x = Math.PI / 2;
-  const aura = new THREE.Mesh(
-    new THREE.SphereGeometry(0.78, 16, 10),
-    new THREE.MeshBasicMaterial({
-      color: 0x6ffff2,
-      transparent: true,
-      opacity: 0.07,
-      depthWrite: false
-    })
-  );
-  group.add(crystal, ring, aura);
+  group.add(model, ring);
   return group;
 }
 
@@ -4865,45 +3673,9 @@ function addPatrolZoneMarker(centerX, centerZ, radius, index) {
 }
 
 function createPatrolDrone(index) {
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(1.45, 0.45, 1.05),
-    new THREE.MeshStandardMaterial({
-      color: 0x202b3f,
-      emissive: 0x34101a,
-      emissiveIntensity: 0.35,
-      roughness: 0.34,
-      metalness: 0.48
-    })
-  );
-  body.castShadow = true;
-
-  const lens = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 12, 8),
-    new THREE.MeshStandardMaterial({
-      color: 0xff5b70,
-      emissive: 0xff233f,
-      emissiveIntensity: 2
-    })
-  );
-  lens.position.set(0, -0.08, 0.58);
-
-  const rotorMaterial = new THREE.MeshBasicMaterial({
-    color: 0xff9ca8,
-    transparent: true,
-    opacity: 0.32,
-    depthWrite: false
-  });
-  const rotorGeometry = new THREE.CircleGeometry(0.62, 24);
+  const group = createModel("drone");
   const rotors = [];
-  for (const x of [-0.88, 0.88]) {
-    const rotor = new THREE.Mesh(rotorGeometry, rotorMaterial);
-    rotor.position.set(x, 0.1, 0);
-    rotor.rotation.x = -Math.PI / 2;
-    rotors.push(rotor);
-    group.add(rotor);
-  }
-
+  group.traverse((node) => { if (node.name.startsWith("joint_rotor")) rotors.push(node); });
   const scan = new THREE.Mesh(
     new THREE.ConeGeometry(1.85, 6.4, 24, 1, true),
     new THREE.MeshBasicMaterial({
@@ -4918,7 +3690,7 @@ function createPatrolDrone(index) {
   scan.position.y = -3.55;
 
   const light = new THREE.PointLight(0xff405f, 3, 12);
-  group.add(body, lens, scan, light);
+  group.add(scan, light);
   group.name = `farm-search-drone-${index}`;
   group.userData.scan = scan;
   group.userData.rotors = rotors;
@@ -5414,7 +4186,7 @@ function updateHazards(delta, elapsed, active = true) {
       data.scan.material.opacity = active ? 0.16 : 0.1;
     }
     if (data.rotors) {
-      for (const rotor of data.rotors) rotor.rotation.z += delta * 24;
+      for (const rotor of data.rotors) rotor.rotation.y += delta * 24;
     }
 
     const distanceSq = hazard.position.distanceToSquared(ufo.group.position);
@@ -5779,6 +4551,7 @@ function drawMinimap(elapsed) {
 }
 
 function updateLandscape(elapsed) {
+  ambientLandscape?.userData.update(elapsed);
   windmillRotors.forEach((rotor) => {
     rotor.rotation.z = elapsed * rotor.userData.rotationSpeed;
   });
@@ -6556,4 +5329,142 @@ function resizeGtaoPass(width, height) {
     Math.max(1, Math.floor(width * gtaoResolutionScale)),
     Math.max(1, Math.floor(height * gtaoResolutionScale))
   );
+}
+
+// Opt-in, development-only integration checks use deterministic simulation steps.
+// They exercise the real gameplay functions without persisting settings or scores.
+async function runModelIntegrationChecks() {
+  const results = [];
+  const seen = new Set();
+  const originalLevel = selectedLevelId;
+  const originalDifficulty = difficulty;
+  const wasMuted = soundMuted;
+  const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  renderer.setAnimationLoop(null);
+  soundMuted = true;
+  difficulty = "normal";
+  try {
+    for (const level of ["farm", "desert", "ice"]) {
+      applyLevel(level);
+      resetRunState();
+      gameStarted = true;
+      setUiState(UI_STATES.PLAYING);
+      camera.position.set(0, 70, 100);
+      camera.lookAt(0, 0, 0);
+      renderer.shadowMap.needsUpdate = true;
+      renderer.info.reset();
+      composer.render(0.016);
+      const renderBudget = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      assert(composer.passes.at(-1) === smaaPass && smaaPass.enabled, `${level}: output anti-aliasing missing`);
+      assert(!terrain.material.flatShading, `${level}: faceted ground shading`);
+      for (const component of terrain.geometry.attributes.position.array) assert(Number.isFinite(component), `${level}: invalid terrain vertex`);
+      if (level === "ice") {
+        for (const body of waterBodies) {
+          for (let sample = 0; sample < 16; sample++) {
+            const angle = sample * Math.PI / 8;
+            const x = body.x + Math.cos(angle) * body.rx;
+            const z = body.z + Math.sin(angle) * body.rz;
+            assert(Math.abs(terrainHeight(x + 0.005, z) - terrainHeight(x - 0.005, z)) < 0.03, "Ice shore height discontinuity");
+          }
+        }
+      }
+      updateLandscape(3);
+      assert(ambientLandscape.material.uniforms.time.value === (reducedLandscapeMotion.matches ? 0 : 3), `${level}: atmosphere animation`);
+      assert(ambientLandscape.geometry.attributes.position.count <= 200, `${level}: particle budget`);
+      if (level !== "farm") {
+        const boundary = scene.getObjectByName(`${level}-natural-boundary`);
+        assert(boundary?.isMesh && !boundary.castShadow, `${level}: natural boundary missing`);
+        assert(terrain.geometry.index.count / 3 === 25088, `${level}: terrain triangle budget`);
+      }
+      scene.traverse((node) => {
+        if (node.userData.modelAsset) seen.add(node.userData.modelAsset);
+        if (node.name.startsWith("asset_")) seen.add(node.name.slice(6));
+      });
+      assert(hazards.length === 3, `${level}: drones missing`);
+      const rotor = hazards[0].userData.rotors[0];
+      const angle = rotor.rotation.y;
+      updateHazards(0.05, 1, false);
+      assert(rotor.rotation.y !== angle, `${level}: drone rotor frozen`);
+      assert(hazards[0].userData.scan.isMesh, `${level}: scan missing`);
+      ufo.group.position.copy(hazards[0].position);
+      beamEnergy = 80;
+      updateHazards(0.01, 1, true);
+      assert(beamEnergy < 80, `${level}: drone contact did not drain energy`);
+      const core = powerups.find(item => !item.userData.collected);
+      assert(core, `${level}: no energy pickup`);
+      ufo.group.position.copy(core.position);
+      const pointsBefore = score;
+      beamEnergy = 40;
+      updatePowerups(0.016, 1, true);
+      assert(core.userData.collected && score > pointsBefore && beamEnergy > 40, `${level}: pickup failed`);
+      const bonus = collectibles.find(item => item.userData.type === "bonus");
+      const abduct = (target) => {
+        beamEnergy = 100;
+        ufo.group.position.copy(target.position).add(new THREE.Vector3(0, 12, 0));
+        keys.add("Space");
+        for (let frame = 0; frame < 240 && !target.userData.collected; frame++) updateBeam(1 / 60, frame / 60 + 2);
+        keys.delete("Space");
+        assert(target.userData.collected && !target.visible, `${level}: abduction failed`);
+      };
+      abduct(bonus);
+      assert(bonusCollected, `${level}: bonus score missing`);
+      for (let wave = 0; wave < 3; wave++) {
+        clearWaveTransitionTimers();
+        prepareWave(wave);
+        waveTransitionActive = false;
+        setUiState(UI_STATES.PLAYING);
+        const animals = collectibles.filter(item => item.userData.type === "animal" && item.userData.active);
+        assert(animals.length === [10, 15, 20][wave], `${level}: wrong wave size`);
+        for (const animal of animals) abduct(animal);
+        assert(waveCowsCollected === [10, 15, 20][wave], `${level}: wave count`);
+        assert(waveTransitionActive, `${level}: wave transition did not start`);
+      }
+      clearWaveTransitionTimers();
+      finishMission(30);
+      assert(gameWon && uiState === UI_STATES.MISSION_COMPLETE, `${level}: completion screen`);
+      const oldY = ufo.group.position.y;
+      updateTakeoff(0.016, clock.elapsedTime);
+      assert(ufo.group.position.y > oldY, `${level}: takeoff`);
+      if (windmillRotors.length) {
+        updateLandscape(5);
+        assert(Math.abs(windmillRotors[0].rotation.z - 2.8) < 1e-9, "Windmill animation");
+      }
+      results.push({ level, abductions: 45, bonus: true, pickup: true, drones: true, completed: true, renderBudget });
+    }
+    assert(seen.size === 39, `Unused assets: ${modelLibraryStats().assets.filter(a => !seen.has(a.id)).map(a => a.id)}`);
+    const memory = [];
+    for (let cycle = 0; cycle < 3; cycle++) {
+      for (const level of ["farm", "desert", "ice"]) {
+        applyLevel(level); resetRunState();
+        renderer.info.reset();
+        composer.render(0.016);
+      }
+      memory.push(renderer.info.memory.geometries);
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    assert(memory[2] <= memory[1] + 2, `Geometry leak after mission swaps: ${memory}`);
+    const report = { status: "PASS", compatibility: ITCH_COMPAT_MODE, assetsUsed: seen.size, missions: results, geometryCounts: memory };
+    console.info("MODEL_INTEGRATION " + JSON.stringify(report));
+    const node = document.createElement("pre");
+    node.id = "model-test-results";
+    node.textContent = JSON.stringify(report, null, 2);
+    node.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:1000;background:#10231f;color:#bfffd7;padding:12px;font-size:11px;max-height:70vh;overflow:auto;pointer-events:none";
+    document.body.append(node);
+  } catch (error) {
+    console.error("MODEL_INTEGRATION FAIL", error);
+    const node = document.createElement("pre");
+    node.id = "model-test-results";
+    node.textContent = "FAIL: " + error.message;
+    node.style.cssText = "position:fixed;top:0;left:0;z-index:1000;background:#500;color:white;padding:20px";
+    document.body.append(node);
+  } finally {
+    clearWaveTransitionTimers();
+    keys.clear(); difficulty = originalDifficulty; soundMuted = wasMuted;
+    applyLevel(originalLevel); returnToMainMenu();
+    clock.getDelta(); renderer.setAnimationLoop(tick);
+  }
+}
+
+if (import.meta.env.DEV && hasRuntimeFlag("modelTest")) {
+  requestAnimationFrame(() => runModelIntegrationChecks());
 }

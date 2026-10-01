@@ -1,68 +1,60 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import * as THREE from 'three';
+import { loadModelLibrary, createModel, modelForMesh, modelForInstances, retainModelResources, modelLibraryStats } from '../src/models/library.js';
 import { createUfo } from '../src/models/ufo.js';
 
-const baselineRef = process.argv[2] || 'backup/pre-visual-refresh-2026-09-09';
-const baseline = execFileSync('git', ['show', `${baselineRef}:src/main.js`], { encoding: 'utf8' });
-const source = baseline.slice(baseline.indexOf('function createUfo() {'), baseline.indexOf('function createBeam() {'));
-const oldUfo = new Function('THREE', 'tempObject', `${source}; return createUfo();`)(THREE, new THREE.Object3D());
-const newUfo = createUfo();
-function stats(ufo) {
-  let meshes = 0, triangles = 0, shadowTriangles = 0, transparentMeshes = 0;
-  ufo.group.traverse((mesh) => {
-    if (!mesh.isMesh) return;
-    meshes++;
-    const geometry = mesh.geometry;
-    const count = (geometry.index?.count ?? geometry.attributes.position.count) / 3 * (mesh.isInstancedMesh ? mesh.count : 1);
-    triangles += count;
-    if (mesh.castShadow) shadowTriangles += count;
-    if (mesh.material.transparent) transparentMeshes++;
-    for (const v of geometry.attributes.position.array) assert(Number.isFinite(v));
+const buffer = readFileSync(new URL('../assets/models/library/models.glb', import.meta.url));
+await loadModelLibrary(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
+const stats = modelLibraryStats();
+assert.equal(stats.loaded, 39);
+const manifest = JSON.parse(readFileSync(new URL('../assets/models/library/manifest.json', import.meta.url), 'utf8'));
+for (const asset of stats.assets) {
+  assert.equal(asset.triangles, manifest.assets[asset.id].triangles, `${asset.id}: export lost faces`);
+  assert(asset.triangles <= (asset.id === 'ufo' ? 4500 : 3000), `${asset.id}: geometry budget`);
+  assert(asset.draws <= (asset.id === 'ufo' ? 6 : asset.id === 'drone' ? 7 : 4), `${asset.id}: draw budget`);
+  const model = createModel(asset.id);
+  model.traverse((part) => {
+    if (!part.isMesh) return;
+    for (const attribute of ['position','normal','color']) {
+      assert(part.geometry.attributes[attribute], `${asset.id}: missing ${attribute}`);
+      for (const value of part.geometry.attributes[attribute].array) assert(Number.isFinite(value), `${asset.id}: invalid ${attribute}`);
+    }
   });
-  return { meshes, triangles, shadowTriangles, transparentMeshes };
+  const box = new THREE.Box3().setFromObject(model);
+  assert(!box.isEmpty() && box.getSize(new THREE.Vector3()).length() > 0, `${asset.id}: empty bounds`);
 }
-const before = stats(oldUfo), after = stats(newUfo);
-for (const metric of Object.keys(before)) assert(after[metric] <= before[metric], `${metric} regressed`);
-assert(after.triangles < before.triangles * 0.4, 'Ship must retain substantial geometry headroom');
-for (const key of ['rim', 'trail', 'engineGlow', 'boostGlow']) assert(newUfo[key], `Missing animation binding: ${key}`);
-newUfo.group.updateMatrixWorld(true);
-const bounds = new THREE.Box3().setFromObject(newUfo.group);
-assert(bounds.max.x - bounds.min.x <= 9.8, 'Craft silhouette exceeded original footprint');
-// The top shell must be visible from above, rather than inside-out.
-const ray = new THREE.Raycaster(new THREE.Vector3(2.3, 20, 18), new THREE.Vector3(0, -1, 0));
-const shell = newUfo.group.getObjectByName('scout-ceramic');
-const hits = ray.intersectObject(shell);
-assert(hits.length > 0 && hits[0].face.normal.y > 0, 'Top hull winding is incorrect');
-console.log(JSON.stringify({ baselineRef, before, after }, null, 2));
-
-const current = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-function extract(code, name) {
-  const start = code.indexOf(`function ${name}(`);
-  assert(start >= 0, `Missing function ${name}`);
-  const end = code.indexOf('\nfunction ', start + 1);
-  return code.slice(start, end < 0 ? code.length : end);
+const ufo = createUfo();
+for (const key of ['rim','trail','engineGlow','boostGlow']) assert(ufo[key], `Missing ${key}`);
+assert(new THREE.Box3().setFromObject(ufo.group).getSize(new THREE.Vector3()).x <= 9.8);
+const hull = ufo.group.children.filter(o=>o.isMesh && !o.material.transparent);
+ufo.group.updateMatrixWorld(true);
+const hits = new THREE.Raycaster(new THREE.Vector3(2.3,20,18), new THREE.Vector3(0,-1,0)).intersectObjects(hull);
+assert(hits.some(hit=>hit.face.normal.y > 0), 'Hull top winding');
+for (const id of ['cow','camel','polar_bear']) {
+  const box = new THREE.Box3().setFromObject(createModel(id));
+  assert(Math.abs(box.min.y) < 0.04, `${id}: feet must touch the ground`);
+  assert(box.max.x < 2.5 && box.min.x > -1.7, `${id}: footprint`);
 }
-function animalStats(code, name, beveled) {
-  const helpers = ['batchOpaqueMeshes', 'hasMovingAncestor', 'geometryAttributeSignature'];
-  if (beveled) helpers.push('animalBodyGeometry');
-  const functions = [...helpers, name].map((name) => extract(code, name)).join('\n');
-  const create = new Function('THREE', 'tempObject', 'RoundedBoxGeometry', 'mergeVertices', 'mergeGeometries',
-    `${functions}; const animal = ${name}(0); batchOpaqueMeshes(animal); return animal;`);
-  return stats({ group: create(THREE, new THREE.Object3D(), RoundedBoxGeometry, mergeVertices, mergeGeometries) });
-}
-for (const name of ['createCow', 'createCamel', 'createPolarBear']) {
-  const oldAnimal = animalStats(baseline, name, false);
-  const newAnimal = animalStats(current, name, true);
-  // Maximum wave size: all 20 animals plus the ship. Account for shadow work too.
-  const oldTotal = before.triangles + oldAnimal.triangles * 20;
-  const newTotal = after.triangles + newAnimal.triangles * 20;
-  assert(newTotal < oldTotal, `${name}: maximum-wave geometry regressed`);
-  assert(newAnimal.meshes <= oldAnimal.meshes, `${name}: batching regressed`);
-  assert(after.shadowTriangles + newAnimal.shadowTriangles * 20 <= before.shadowTriangles + oldAnimal.shadowTriangles * 20,
-    `${name}: maximum-wave shadow geometry regressed`);
-  console.log(`${name}: 20 animals + ship: ${oldTotal} -> ${newTotal} triangles; animal meshes ${oldAnimal.meshes} -> ${newAnimal.meshes}`);
-}
+const drone = createModel('drone');
+assert(drone.getObjectByName('joint_rotor_-1'));
+assert(drone.getObjectByName('joint_rotor_1'));
+assert(createModel('windmill').getObjectByName('joint_rotor'));
+// Placement adapters must preserve bounds, instance transforms and shared resources.
+const source = new THREE.Mesh(new THREE.BoxGeometry(4.6,1.2,1.5), new THREE.MeshStandardMaterial());
+const fitted = modelForMesh(source,'ice_block');
+const targetBox = new THREE.Box3().setFromObject(source);
+const fitBox = new THREE.Box3().setFromObject(fitted);
+assert(targetBox.min.distanceTo(fitBox.min)<1e-5 && targetBox.max.distanceTo(fitBox.max)<1e-5);
+const instance = new THREE.InstancedMesh(source.geometry,source.material,2);
+const matrix = new THREE.Matrix4().makeTranslation(3,4,5);
+instance.setMatrixAt(0,matrix); instance.setMatrixAt(1,new THREE.Matrix4().makeTranslation(-2,1,0));
+const instanced = modelForInstances(instance,'ice_block');
+const actual = new THREE.Matrix4();
+instanced.children[0].getMatrixAt(0,actual);
+assert.deepEqual(actual.elements,matrix.elements);
+const retained = {geometries:new Set(),materials:new Set()};
+retainModelResources(retained);
+assert(retained.geometries.has(instanced.children[0].geometry));
+console.table(stats.assets);
+console.log(`PASS: ${stats.loaded} Blender assets, ${stats.assets.reduce((sum,a)=>sum+a.triangles,0)} unique triangles; valid pivots, instance placement, shared resources and UFO bindings.`);

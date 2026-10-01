@@ -1,5 +1,9 @@
 # Grafiküberarbeitung vom 9. September 2026
 
+Historischer Stand: Die folgenden Vergleichswerte beschreiben die Überarbeitung vom September.
+Seit 1. Oktober 2026 ersetzt die Blender-Modellbibliothek diese Modelle; der aktuelle
+Workflow und die neuen Prüfungen stehen in der [aktuellen README](../README.md#blender-sources).
+
 ## Gesicherter alter Stand
 
 Vor der ersten Grafikänderung wurde der vollständige versionierte Arbeitsstand auf

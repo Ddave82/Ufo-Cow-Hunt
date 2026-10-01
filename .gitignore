@@ -6,3 +6,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .vite/
+
+# Blender Python cache and automatic backup files
+__pycache__/
+*.blend1
+
+# Reproducible upload archives
+releases/

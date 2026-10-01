@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>UFO Cow Hunt — visual update</title><style>body{margin:0;background:#071c24;color:#e6f5f0;font:18px/1.65 system-ui,sans-serif}article{max-width:860px;margin:auto;padding:56px 24px 80px}h1{font-size:clamp(32px,5vw,52px);line-height:1.12;letter-spacing:-.035em}h2{margin-top:2em;color:#80e5c5;font-size:28px}figure{margin:28px 0}img{max-width:100%;height:auto;border-radius:12px}em{color:#afc6c5;font-size:15px}</style><article><h1>A new look for UFO Cow Hunt: 39 models, three refreshed worlds</h1>
+<p>The latest visual update gives UFO Cow Hunt a much more consistent low-poly look — from the little alien in the cockpit to the landscapes underneath the saucer. The idea was to make every world feel like part of the same game while keeping the arcade action easy to read.</p>
+<figure><img src="media/banner-1920x1080.png" alt="Blender key art featuring the actual UFO and animal models"></figure>
+<h2>One model library for the whole game</h2>
+<p>The game now uses a coordinated library of <strong>39 models created in Blender</strong>. That includes the UFO, cows, camels, polar bears, three bonus characters, patrol drones, energy pickups, buildings, plants and landscape props.</p>
+<p>The Scout-07 UFO combines a pale ceramic hull with copper details, a glowing engine rim and a glass cockpit with a visible pilot. The animals have clearer silhouettes, and scenery uses the same restrained palette and chunky forms.</p>
+<figure><img src="media/models-overview.png" alt="All 39 game models together in the Blender catalogue"></figure>
+<p><em>Behind the scenes: the complete Blender catalogue. Models are arranged at display scales so even small props are visible; this is a studio render, not a gameplay view.</em></p>
+<figure><img src="media/ufo-studio.png" alt="The redesigned Scout-07 UFO in a Blender studio render"></figure>
+<h2>More character in each world</h2>
+<p><strong>Farm Night</strong> keeps its rolling green landscape, ponds and moonlit farm buildings. Small wildflower patches and floating light motes add a little life around the fields.</p>
+<figure><img src="media/gameplay-farm.jpg" alt="Farm Night — actual browser gameplay"></figure>
+<p><strong>Desert Hunt</strong> now has more pronounced dunes and irregular sandstone formations instead of repeated block rows around the edge. Subtle wind patterns, scattered stone groups and drifting dust help the sand feel less empty.</p>
+<figure><img src="media/gameplay-desert.jpg" alt="Desert Hunt — actual browser gameplay"></figure>
+<p><strong>Ice Drift</strong> gets snowdrifts, snow-capped ice peaks and smoother transitions around frozen lakes. Small ice-colored stones and gently drifting snow finish the scene.</p>
+<figure><img src="media/gameplay-ice.jpg" alt="Ice Drift — actual browser gameplay"></figure>
+<h2>Smoother ground, fewer distractions</h2>
+<p>The ground needed its own pass. Hard color boundaries and visible triangle shading made some surfaces look rough and pixelated. Ground colors and lighting now blend more smoothly, and fine sand/snow patterns fade with distance instead of turning into flickering stripes. Final-image anti-aliasing and better contact-shadow filtering help keep the image clean while the objects retain their low-poly character.</p>
+<h2>Keeping the browser build lean</h2>
+<p>The entire model library contains <strong>21,480 unique triangles</strong> and exports to a <strong>1.96 MB GLB</strong>. Repeated props share geometry, static scenery is batched, and each world&#x27;s ambient particles use one draw call. The desert and ice ground meshes each stay at 25,088 triangles, including the new terrain shapes.</p>
+<p>This is not a promise of a particular frame rate on every device. It is a way to keep the artwork within clear budgets while improving the look. The update has passed automated checks through all three missions in both rendering modes, including repeated level changes to check resource cleanup.</p>
+<h2>Same questionable mission</h2>
+<p>There are still three timed waves per mission: 10, 15 and 20 animals. Fly, beam up targets, collect energy, find the hidden bonus character and keep clear of patrol drones. The visual update keeps those rules intact.</p>
+<p><strong>Which world is your favorite: the farm, desert or ice?</strong> Feedback on readability and performance is especially useful — include your browser and device if something looks wrong or runs slowly.</p></article></html>

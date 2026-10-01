@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Added an illustrated README, English/German itch.io devlogs, current screenshots, Blender cover/banner art and a reproducible HTML-game/press-kit packaging command.
+
+- Smoothed ground color/lighting transitions, added distance-filtered sand/snow patterns, sculpted low dunes and snowdrifts, and blended icy shore heights.
+- Added final-image SMAA and improved AO denoising to reduce jagged, grainy ground rendering.
+- Added sparse instanced ground details while keeping the terrain mesh budgets unchanged.
+
+- Replaced desert/ice perimeter block rows with natural faceted formations and terrain-following ground accents.
+- Added subtle GPU-animated dust, snow and meadow motes, plus instanced wildflowers; respects reduced motion.
+- Reduced desert/ice terrain geometry and batched static scenery across prop roots, with render-budget and resource checks.
+
+- Replaced procedural object models with a coordinated 39-asset Blender library: UFO,
+  animals, bonus characters, drone, pickups, architecture and scenery in all three missions.
+- Added editable Blender sources, a complete preview catalogue and reproducible generation scripts.
+- Added material batching, instanced props, shared-resource retention and a model loading state.
+- Added asset-budget checks and optional development integration checks for all missions.
+
 - Simplified the main menu flow with direct Play, Select Mission, and Settings actions.
 - Reworked mission selection into compact level cards that launch missions directly.
 - Added contextual tutorial hints with settings controls to disable or replay the tutorial.
