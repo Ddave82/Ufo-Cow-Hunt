@@ -2022,6 +2022,7 @@ function addLandscapeDetails() {
     addDesertGroundDetails();
     addDesertBoundaryBlocks();
     addDesertDetails();
+    addDesertBoulders();
     addRocks();
     addClouds();
     return;
@@ -2034,6 +2035,7 @@ function addLandscapeDetails() {
     addFrozenLakes();
     addIceBoundaryBlocks();
     addIceDetails();
+    addMediumIceShards();
     addRocks();
     addClouds();
     return;
@@ -2983,33 +2985,62 @@ function addPathStones() {
 }
 
 function addGrassClumps() {
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x255832,
-    roughness: 0.95
-  });
-  const geometry = new THREE.ConeGeometry(0.24, 0.9, 5);
-  const clumps = new THREE.InstancedMesh(geometry, material, 52);
-  let count = 0;
-
-  for (let i = 0; i < 88; i += 1) {
-    const x = ((i * 47) % 150) - 75 + Math.sin(i * 1.8) * 2.4;
-    const z = ((i * 61) % 150) - 75 + Math.cos(i * 1.4) * 2.4;
-    if (!isDryObjectSpot(x, z, 3.8) || pathAmount(x, z) > 0.45) continue;
-    if (shoreAmount(x, z) < 0.18 && pastureAmount(x, z) < 0.3 && Math.abs(x) < halfWorld - 18 && Math.abs(z) < halfWorld - 18) continue;
-    const scale = 0.55 + (i % 5) * 0.08;
-    tempObject.position.set(x, terrainHeight(x, z) + 0.42 * scale, z);
-    tempObject.rotation.set(0, i * 0.77, 0);
-    tempObject.scale.set(scale, scale * (0.75 + (i % 4) * 0.12), scale);
-    tempObject.updateMatrix();
-    clumps.setMatrixAt(count, tempObject.matrix);
-    count += 1;
-    if (count >= 52) break;
+  const matrices = [];
+  // Small irregular patches across open meadows, with clear paths and shores.
+  // Native Blender blades keep their readable shape instead of the tiny proxy fit.
+  for (let cluster = 0; cluster < 76; cluster++) {
+    const x = ((cluster * 47) % 142) - 71 + Math.sin(cluster * 1.8) * 2.4;
+    const z = ((cluster * 61) % 142) - 71 + Math.cos(cluster * 1.4) * 2.4;
+    for (let blade = 0; blade < 2 + cluster % 2; blade++) {
+      const angle = cluster * 2.4 + blade * 2.1;
+      const px = x + Math.cos(angle) * (0.3 + blade * 0.48);
+      const pz = z + Math.sin(angle) * (0.3 + blade * 0.48);
+      if (!isDryObjectSpot(px, pz, 1.2) || pathAmount(px, pz) > 0.28 ||
+        !isClearOfSpawnBlockers(px, pz, 2)) continue;
+      const scale = 0.85 + ((cluster + blade * 3) % 5) * 0.12;
+      tempObject.position.set(px, terrainHeight(px, pz) - 0.03, pz);
+      tempObject.rotation.set(0, angle, 0);
+      tempObject.scale.set(scale * 1.2, scale, scale * 1.2);
+      tempObject.updateMatrix();
+      matrices.push(tempObject.matrix.clone());
+    }
   }
+  const grass = modelInstances("grass", matrices);
+  grass.name = "meadow-grass-patches";
+  // Small ground cover receives shadows; casting adds noise at flight distance.
+  grass.traverse(part => { if (part.isMesh) part.castShadow = false; });
+  addLevelObject(grass);
+}
 
-  clumps.count = count;
-  clumps.castShadow = true;
-  clumps.receiveShadow = true;
-  addLevelObject(modelForInstances(clumps, "grass"));
+function addDesertBoulders() {
+  const matrices = [];
+  [[-20, 5, 3.1, 2.0, 2.5], [-48, -43, 2.8, 2.3, 2.3],
+    [46, -58, 3.3, 1.9, 2.6], [17, 46, 2.6, 2.1, 2.4]].forEach(([x, z, sx, sy, sz], index) => {
+    const spot = findDryObjectSpot(x, z, 5, 1320 + index);
+    tempObject.position.set(spot.x, terrainHeight(spot.x, spot.z) + sy * 0.52, spot.z);
+    tempObject.rotation.set(0, index * 1.7 + 0.3, 0);
+    tempObject.scale.set(sx, sy, sz);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
+  });
+  const rocks = modelInstances("rock", matrices);
+  rocks.name = "desert-scattered-boulders";
+  addLevelObject(rocks);
+}
+
+function addMediumIceShards() {
+  const matrices = [];
+  [[-12, 6, 1.4, 0.35], [22, 14, 1.25, -0.8]].forEach(([x, z, scale, rotation], index) => {
+    const spot = findDryObjectSpot(x, z, 5, 1340 + index);
+    tempObject.position.set(spot.x, terrainHeight(spot.x, spot.z) - 0.08, spot.z);
+    tempObject.rotation.set(0, rotation, 0);
+    tempObject.scale.set(scale, scale, scale);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
+  });
+  const shards = modelInstances("ice_shard", matrices);
+  shards.name = "ice-medium-shards";
+  addLevelObject(shards);
 }
 
 function addTrees() {

@@ -41,7 +41,7 @@ export function createGroundDetails(level, heightAt, allowed) {
   const dummy = new THREE.Object3D();
   const ice = level === "ice";
   const palette = ice ? [0xb4d9e4, 0xdcebf0, 0x84b6c9] : [0xbc956a, 0xdbb889, 0xa77c51];
-  for (let cluster = 0; cluster < 24; cluster++) {
+  for (let cluster = 0; cluster < (ice ? 28 : 24); cluster++) {
     const x = ((cluster * 53) % 140) - 70;
     const z = ((cluster * 37 + 17) % 140) - 70;
     for (let i = 0; i < 4; i++) {

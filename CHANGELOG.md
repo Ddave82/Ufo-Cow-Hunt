@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-02 — Sparse landscape accents
+
+- Distribute readable Blender grass tufts in small patches across Farm Night, keeping paths and shorelines clear.
+- Add four scattered boulders to Desert Hunt and two medium ice formations to Ice Drift.
+- Slightly increase ice ground debris from 24 to 28 candidate clusters.
+- Instance the added props; include solid rock/ice footprints in the existing spawn and movement safety checks.
+
 ## 2026-10-02 — Smooth UFO ground shadows
 
 - Synchronize the ground shadow with every rendered frame on itch.io.
