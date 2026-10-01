@@ -9,7 +9,8 @@
     "build:pages": "vite build --base=/Ufo-Cow-Hunt/",
     "preview": "vite preview --host 127.0.0.1",
     "check:models": "node scripts/check-ufo-budget.mjs",
-    "package:itch": "npm run build && python3 scripts/package_itch.py"
+    "package:itch": "npm run build && python3 scripts/package_itch.py",
+    "check:spawns": "node scripts/check-spawns.mjs"
   },
   "dependencies": {
     "three": "^0.170.0",

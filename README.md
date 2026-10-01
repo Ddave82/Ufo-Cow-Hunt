@@ -37,7 +37,8 @@ Cores are optional and do not require the beam.
 
 Drones slow the UFO and drain energy on contact. Choose Easy (no drones), Normal
 (three) or Hard (four). From wave two, boost can scare animals; in wave three,
-targets wander. Wave timeouts advance the mission; clear the last wave in time for
+targets wander. Every wave receives fresh, separated spawn positions on clear ground;
+animals avoid water, buildings, trees, fences and each other while moving. Wave timeouts advance the mission; clear the last wave in time for
 the takeoff finish. The results screen breaks down animals, pickups and bonuses.
 
 | Key | Action |
@@ -135,6 +136,7 @@ level export. Blender scripts do not need to run to play or build the browser ga
 
 ```sh
 npm run check:models
+npm run check:spawns
 npm run build
 npm run build:pages
 ```
@@ -144,6 +146,8 @@ On the development server, open `/?modelTest=1` for integration checks, or
 all three waves of all missions, beam collection, bonus targets, pickups, drone drain,
 rotors, mission completion and takeoff. They also check terrain vertices, continuous
 ice shores, particle budgets, final anti-aliasing and repeated mission changes.
+Each world additionally checks 60 wave layouts and 60 simulated seconds of wandering
+and boost scares: fresh positions, minimum spacing, dry ground and solid prop clearance.
 
 The checks reposition targets and advance simulation directly; they are not a full
 real-time playthrough or a test of itch.io hosting. The runner is removed from

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-02 — Safe animal distribution
+
+- Give every wave fresh animal positions with at least 9.5 units of separation.
+- Search other zones and a complete safe-ground grid when a preferred zone is full; never fall back to a duplicate or unchecked position.
+- Index actual transformed building, tree, rock and fence footprints once per mission.
+- Keep moving animals apart, check their routes and remove end-of-movement teleporting.
+- Add regression coverage for crowded zones, obstacles, water, all wave sizes and movement in all three worlds.
+
 ## 2026-10-02 — UFO lighting and farm polish
 
 - Exclude transparent engine/beam effects from GTAO to prevent phantom contact shadows.

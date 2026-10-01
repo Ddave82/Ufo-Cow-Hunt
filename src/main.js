@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { findSpawnSpot, SpawnObstacleIndex } from "./gameplay/spawn.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { StableGTAOPass } from "./landscape/StableGTAOPass.js";
@@ -309,6 +310,8 @@ const iceBonusSpawnZones = [
 ];
 let waterBodies = farmWaterBodies;
 let spawnBlockers = farmSpawnBlockers;
+let spawnObstacles = new SpawnObstacleIndex();
+let previousCowSpots = [];
 let cowSpawnZones = farmAnimalSpawnZones;
 let bonusSpawnZones = farmBonusSpawnZones;
 const keys = new Set();
@@ -977,11 +980,14 @@ function rebuildLevel() {
   waterSurfaces.length = 0;
   waterRipples.length = 0;
   ambientLandscape = null;
+  spawnObstacles = new SpawnObstacleIndex();
+  previousCowSpots = [];
   terrain = createTerrain();
   addLevelObject(terrain);
   addLandscapeDetails();
   ambientLandscape = createAtmosphere(activeLevelId, terrainHeight, reducedLandscapeMotion.matches);
   addLevelObject(ambientLandscape);
+  indexSpawnObstacles();
   freezeStaticLevelObjects();
   spawnCollectibles();
   spawnPowerups();
@@ -1067,6 +1073,33 @@ function releaseObjectResources(root, retained, released) {
     if (retained.geometries.has(geometry) || released.geometries.has(geometry)) return;
     geometry.dispose();
     released.geometries.add(geometry);
+  });
+}
+
+function indexSpawnObstacles() {
+  // Decorative ground cover is traversable. All solid Blender props, including
+  // each individual fence/tree instance, use their actual transformed bounds.
+  const groundCover = new Set(["grass", "reed", "pebble", "path_stone", "shrub"]);
+  const matrix = new THREE.Matrix4();
+  const box = new THREE.Box3();
+  levelObjects.forEach(root => {
+    root.updateMatrixWorld(true);
+    root.traverse(object => {
+      if (!object.isMesh) return;
+      let owner = object;
+      while (owner && !owner.userData.modelAsset) owner = owner.parent;
+      if (!owner || groundCover.has(owner.userData.modelAsset)) return;
+      object.geometry.computeBoundingBox();
+      const count = object.isInstancedMesh ? object.count : 1;
+      for (let i = 0; i < count; i++) {
+        if (object.isInstancedMesh) {
+          object.getMatrixAt(i, matrix);
+          matrix.premultiply(object.matrixWorld);
+        } else matrix.copy(object.matrixWorld);
+        box.copy(object.geometry.boundingBox).applyMatrix4(matrix);
+        spawnObstacles.add(box);
+      }
+    });
   });
 }
 
@@ -3239,8 +3272,7 @@ function spawnCollectibles() {
   const bonusSpot = findRandomSpawnSpot({
     zones: bonusSpawnZones,
     used: cowSpots,
-    minDistance: 16,
-    fallbackSeed: 99
+    minDistance: 16
   });
   addCollectible(human, "bonus", bonusSpot.x, bonusSpot.z, 750);
   prepareWave(0);
@@ -3293,8 +3325,7 @@ function prepareWave(waveIndex) {
   const bonusSpot = findRandomSpawnSpot({
     zones: bonusSpawnZones,
     used: cowSpots,
-    minDistance: 16,
-    fallbackSeed: 99
+    minDistance: 16
   });
 
   collectibles.forEach((item) => {
@@ -3356,44 +3387,18 @@ function positionCollectible(group, type, x, z) {
 
 function generateCowSpawnSpots(cowCount = waveCowGoal) {
   const spots = [];
-
-  for (let index = 0; index < cowCount; index += 1) {
-    const zone = cowSpawnZones[index % cowSpawnZones.length];
-    spots.push(findRandomSpawnSpot({
-      zones: [zone],
-      used: spots,
-      minDistance: 9.5,
-      fallbackSeed: index
-    }));
+  for (let index = 0; index < cowCount; index++) {
+    // Rotate preferred regions, but allow every region when one is full.
+    const offset = (index + currentWaveIndex * 3) % cowSpawnZones.length;
+    const zones = [...cowSpawnZones.slice(offset), ...cowSpawnZones.slice(0, offset)];
+    spots.push(findRandomSpawnSpot({ zones, used: spots, previous: previousCowSpots, minDistance: 9.5 }));
   }
-
+  previousCowSpots = spots.map(spot => ({ ...spot }));
   return spots;
 }
 
-function findRandomSpawnSpot({ zones, used = [], minDistance = 9, fallbackSeed = 0 }) {
-  for (let attempt = 0; attempt < 160; attempt += 1) {
-    const zone = zones[Math.floor(Math.random() * zones.length)];
-    const x = zone.x + (Math.random() - 0.5) * zone.width;
-    const z = zone.z + (Math.random() - 0.5) * zone.depth;
-    if (isSpawnCandidateSafe(x, z, used, minDistance)) return { x, z };
-  }
-
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const zone = zones[(attempt + fallbackSeed) % zones.length];
-    const angle = fallbackSeed * 1.37 + attempt * 2.11;
-    const radiusX = zone.width * (0.12 + ((attempt * 17) % 37) / 100);
-    const radiusZ = zone.depth * (0.12 + ((attempt * 23) % 37) / 100);
-    const x = zone.x + Math.cos(angle) * radiusX;
-    const z = zone.z + Math.sin(angle) * radiusZ;
-    if (isSpawnCandidateSafe(x, z, used, minDistance * 0.82)) return { x, z };
-  }
-
-  for (const zone of zones) {
-    const spot = findDrySpot(zone.x, zone.z, fallbackSeed);
-    if (isSpawnCandidateSafe(spot.x, spot.z, used, minDistance * 0.65)) return spot;
-  }
-
-  return findDrySpot(0, 0, fallbackSeed);
+function findRandomSpawnSpot({ zones, used = [], previous = [], minDistance = 9 }) {
+  return findSpawnSpot({ zones, used, previous, minDistance, isSafe: isSpawnSafe, limit: halfWorld - 8 });
 }
 
 function isSpawnCandidateSafe(x, z, used, minDistance) {
@@ -3579,7 +3584,7 @@ function isDryObjectSpot(x, z, clearance = 4) {
 function isSpawnSafe(x, z) {
   if (Math.abs(x) > halfWorld - 8 || Math.abs(z) > halfWorld - 8) return false;
   if (isWater(x, z, 12)) return false;
-  if (!isClearOfSpawnBlockers(x, z, 4)) return false;
+  if (!isClearOfSpawnBlockers(x, z, 4) || !spawnObstacles.isClear(x, z)) return false;
 
   const sampleRadius = 5.5;
   const sampleOffsets = [
@@ -4028,9 +4033,6 @@ function updateCollectibleMovement(item, delta, elapsed) {
   const distance = Math.hypot(dx, dz);
 
   if (distance < 0.25 || elapsed > item.userData.moveUntil) {
-    item.position.x = target.x;
-    item.position.z = target.z;
-    item.userData.baseY = collectibleBaseHeight(type, item.position.x, item.position.z);
     item.userData.moveTarget = null;
     item.userData.moveSpeed = 0;
     item.userData.wanderPauseUntil = elapsed + 2.4 + Math.random() * 4;
@@ -4040,7 +4042,7 @@ function updateCollectibleMovement(item, delta, elapsed) {
   const step = Math.min(distance, item.userData.moveSpeed * delta);
   const nextX = item.position.x + (dx / distance) * step;
   const nextZ = item.position.z + (dz / distance) * step;
-  if (!isSpawnSafe(nextX, nextZ)) {
+  if (!isCollectibleMoveSafe(item, nextX, nextZ)) {
     item.userData.moveTarget = null;
     item.userData.moveSpeed = 0;
     item.userData.wanderPauseUntil = elapsed + 2.5 + Math.random() * 3;
@@ -4064,7 +4066,8 @@ function maybeScareCow(cow, elapsed) {
     cow.position.z,
     awayX,
     awayZ,
-    9 + Math.random() * 5.5
+    9 + Math.random() * 5.5,
+    cow
   );
   if (!target) return;
 
@@ -4083,7 +4086,8 @@ function maybeStartIdleWander(item, elapsed) {
     item.position.z,
     Math.cos(angle),
     Math.sin(angle),
-    distance
+    distance,
+    item
   );
   if (!target) {
     item.userData.wanderPauseUntil = elapsed + 2.5;
@@ -4095,7 +4099,13 @@ function maybeStartIdleWander(item, elapsed) {
   item.userData.moveUntil = elapsed + 4.5;
 }
 
-function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance) {
+function isCollectibleMoveSafe(item, x, z) {
+  if (!isSpawnSafe(x, z)) return false;
+  return collectibles.every(other => other === item || other.userData.collected ||
+    other.userData.active === false || Math.hypot(other.position.x - x, other.position.z - z) >= 5.5);
+}
+
+function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance, item) {
   const length = Math.hypot(dirX, dirZ) || 1;
   const baseAngle = Math.atan2(dirZ / length, dirX / length);
   const angleOffsets = [0, 0.45, -0.45, 0.9, -0.9, Math.PI];
@@ -4113,7 +4123,14 @@ function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance) {
         -halfWorld + 8,
         halfWorld - 8
       );
-      if (isSpawnSafe(targetX, targetZ)) return { x: targetX, z: targetZ };
+      // Sample the whole route so animals cannot cross narrow fences or water.
+      const steps = Math.ceil(Math.hypot(targetX - startX, targetZ - startZ) / 0.75);
+      let clear = true;
+      for (let step = 1; step <= steps; step++) {
+        if (!isCollectibleMoveSafe(item, startX + (targetX - startX) * step / steps,
+          startZ + (targetZ - startZ) * step / steps)) { clear = false; break; }
+      }
+      if (clear) return { x: targetX, z: targetZ };
     }
   }
 
@@ -5410,6 +5427,42 @@ async function runModelIntegrationChecks() {
       beamEnergy = 40;
       updatePowerups(0.016, 1, true);
       assert(core.userData.collected && score > pointsBefore && beamEnergy > 40, `${level}: pickup failed`);
+      const assertDistribution = (minimum) => {
+        const active = collectibles.filter(item => item.userData.active && !item.userData.collected);
+        active.forEach((item, index) => {
+          assert(isSpawnSafe(item.position.x, item.position.z), `${level}: unsafe animal/bonus placement`);
+          active.slice(index + 1).forEach(other => assert(
+            Math.hypot(item.position.x - other.position.x, item.position.z - other.position.z) >= minimum - 1e-6,
+            `${level}: overlapping animals`));
+        });
+      };
+      // Repeat the real wave allocator, including dense third waves, then
+      // exercise wandering and boost scares against the same collision rules.
+      for (let cycle = 0; cycle < 20; cycle++) {
+        for (let wave = 0; wave < 3; wave++) {
+          const oldSpots = previousCowSpots;
+          prepareWave(wave);
+          assertDistribution(9.5);
+          for (const spot of previousCowSpots) assert(oldSpots.every(old =>
+            Math.hypot(old.x - spot.x, old.z - spot.z) >= 4), `${level}: reused wave positions`);
+        }
+      }
+      waveTransitionActive = false;
+      for (let frame = 0; frame < 1800; frame++) {
+        const animal = collectibles[frame % 20];
+        ufo.group.position.copy(animal.position).add(new THREE.Vector3(6, 12, 0));
+        boostActive = frame % 120 < 60;
+        updateCollectibles(1 / 30, clock.elapsedTime + frame / 30 + 10);
+        assertDistribution(5.5);
+      }
+      boostActive = false;
+      const stopped = collectibles[0];
+      const beforeStop = stopped.position.clone();
+      stopped.userData.moveTarget = { x: 0, z: 0 };
+      stopped.userData.moveUntil = -1;
+      updateCollectibleMovement(stopped, 1 / 60, clock.elapsedTime + 100);
+      assert(stopped.position.equals(beforeStop), `${level}: expired movement teleported`);
+      prepareWave(0);
       const bonus = collectibles.find(item => item.userData.type === "bonus");
       const abduct = (target) => {
         beamEnergy = 100;
@@ -5442,7 +5495,7 @@ async function runModelIntegrationChecks() {
         updateLandscape(5);
         assert(Math.abs(windmillRotors[0].rotation.z - 2.8) < 1e-9, "Windmill animation");
       }
-      results.push({ level, abductions: 45, bonus: true, pickup: true, drones: true, completed: true, renderBudget });
+      results.push({ level, abductions: 45, bonus: true, pickup: true, drones: true, completed: true, spawnWavesChecked: 60, movementSecondsChecked: 60, renderBudget });
     }
     assert(seen.size === 39, `Unused assets: ${modelLibraryStats().assets.filter(a => !seen.has(a.id)).map(a => a.id)}`);
     const memory = [];
