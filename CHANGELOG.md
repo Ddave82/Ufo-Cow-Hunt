@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-02 — UFO lighting and farm polish
+
+- Exclude transparent engine/beam effects from GTAO to prevent phantom contact shadows.
+- Preserve the UFO ground shadow while avoiding stale self-shadowing on its moving hull.
+- Remodel oak fence posts and rails in Blender; connect rails, add braces and pasture entrances.
+- Mix short perimeter fences with instanced trees, rocks and grass in Farm Night.
+- Add an updated overview card and farm scenery captures for the itch.io gallery.
+
 ## Unreleased
 
 - Added an illustrated README, English/German itch.io devlogs, current screenshots, Blender cover/banner art and a reproducible HTML-game/press-kit packaging command.

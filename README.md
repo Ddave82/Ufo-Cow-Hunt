@@ -67,9 +67,13 @@ smoothly, fine wind patterns fade in the distance, and final-image anti-aliasing
 reduces jagged edges. Small stone groups, wildflowers, dust, snow and light motes add
 life. Ambient particle motion respects the reduced-motion preference.
 
+A follow-up polish pass adds connected timber fences, pasture entrances and a mixed
+woodland boundary to Farm Night. Transparent glow effects no longer contribute solid
+contact shadows, and the moving UFO no longer receives stale self-shadows.
+
 Repeated props use instancing, static scenery is batched, and cached model resources
-survive mission changes. The model library has **21,480 unique triangles** and a
-**1.96 MB GLB**. Desert and ice ground meshes each use **25,088 triangles**. These
+survive mission changes. The model library has **21,558 unique triangles** and a
+**1.97 MB GLB**. Desert and ice ground meshes each use **25,088 triangles**. These
 are geometry budgets, not FPS guarantees; actual performance depends on the device,
 viewport and render mode.
 

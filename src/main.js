@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { GTAOPass } from "three/addons/postprocessing/GTAOPass.js";
+import { StableGTAOPass } from "./landscape/StableGTAOPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
@@ -139,7 +139,7 @@ const composer = new EffectComposer(renderer);
 composer.setPixelRatio(initialPixelRatio);
 composer.setSize(initialRenderSize.width, initialRenderSize.height);
 const renderPass = new RenderPass(scene, camera);
-const gtaoPass = new GTAOPass(
+const gtaoPass = new StableGTAOPass(
   scene,
   camera,
   Math.floor(initialRenderSize.width * gtaoResolutionScale),
@@ -2687,53 +2687,62 @@ function addComposedShorelineClusters() {
 }
 
 function addBoundaryFence() {
-  const fenceInset = 3.6;
-  const fenceHalf = halfWorld - fenceInset;
-  const spacing = 6.8;
-  const segmentCount = Math.floor((fenceHalf * 2) / spacing);
-  const postGeometry = new THREE.CylinderGeometry(0.12, 0.16, 1.35, 6);
-  const railGeometry = new THREE.BoxGeometry(1, 0.12, 0.12);
-  const woodMaterial = new THREE.MeshStandardMaterial({
-    color: 0x5a3a22,
-    roughness: 0.88,
-    metalness: 0.02
-  });
-  const north = [];
-  const south = [];
-  const west = [];
-  const east = [];
-  for (let i = 0; i <= segmentCount; i += 1) {
-    const t = -fenceHalf + i * spacing;
-    north.push([t, -fenceHalf]);
-    south.push([t, fenceHalf]);
-    west.push([-fenceHalf, t]);
-    east.push([fenceHalf, t]);
+  const edge = halfWorld - 4.8;
+  const lines = [];
+  const trees = [], rocks = [], undergrowth = [];
+  const edgePoint = (side, along, inset = 0) => side < 2
+    ? [along, (side === 0 ? -1 : 1) * (edge - inset)]
+    : [(side === 2 ? -1 : 1) * (edge - inset), along];
+  const place = (matrices, x, z, sx, sy, sz, angle) => {
+    if (isWater(x, z, 1.5)) return;
+    tempObject.position.set(x, terrainHeight(x, z), z);
+    tempObject.rotation.set(0, angle, 0);
+    tempObject.scale.set(sx, sy, sz);
+    tempObject.updateMatrix();
+    matrices.push(tempObject.matrix.clone());
+  };
+  for (let side = 0; side < 4; side++) {
+    // Short timber runs alternate with irregular woodland pockets.
+    for (const [start, end] of [[-70, -48], [-15, 10], [40, 61]]) {
+      const count = Math.ceil((end - start) / 4.8);
+      lines.push(Array.from({ length: count + 1 }, (_, i) =>
+        edgePoint(side, start + (end - start) * i / count)));
+    }
+    for (let i = 0; i < 11; i++) {
+      const t = -78 + i * 15.5;
+      const inFence = (t > -71 && t < -47) || (t > -16 && t < 11) || (t > 39 && t < 62);
+      for (let j = 0; j < (inFence ? 1 : 3); j++) {
+        const [x, z] = edgePoint(side, t + (j - 1) * 3.7, inFence ? -2.8 : Math.sin(i * 2 + j) * 2.5);
+        const scale = 0.72 + ((i * 7 + j * 3 + side) % 8) * 0.085;
+        place(trees, x, z, scale, scale * (1.05 + j * 0.08), scale, i * 2.4 + j);
+      }
+      const [x, z] = edgePoint(side, t + 3, 2.6 + Math.sin(i) * 1.3);
+      place(rocks, x, z, 1.4 + i % 3 * 0.3, 0.72, 1.15, i * 1.7);
+      place(undergrowth, x + 1.5, z + 0.8, 1.1, 1.1, 1.1, i);
+    }
   }
-
-  addLevelObject(createFenceGroup(
-    [north, south, west, east],
-    postGeometry,
-    railGeometry,
-    woodMaterial,
-    { postHeight: 1.35, railHeights: [0.72, 1.08], skipWater: false }
-  ));
+  const boundary = new THREE.Group();
+  boundary.name = "farm-natural-boundary";
+  boundary.add(createFenceGroup(lines, { postHeight: 1.8, railHeights: [0.62, 1.22], braces: true }),
+    modelInstances("pine", trees), modelInstances("rock", rocks), modelInstances("grass", undergrowth));
+  addLevelObject(boundary);
 }
 
-function createFenceGroup(lines, postGeometry, railGeometry, material, options) {
-  const postMatrices = [];
-  const railMatrices = [];
-  lines.forEach((points) => collectFenceLineMatrices(points, options, postMatrices, railMatrices));
-
+function createFenceGroup(lines, options) {
+  const postMatrices = [], railMatrices = [];
+  const uniquePosts = new Set();
+  lines.forEach((points) => collectFenceLineMatrices(points, options, postMatrices, railMatrices, uniquePosts));
   const group = new THREE.Group();
-  const posts = createStaticInstancedMesh(postGeometry, material, postMatrices, true, true);
-  const rails = createStaticInstancedMesh(railGeometry, material, railMatrices, true, true);
-  if (posts) group.add(modelForInstances(posts, "fence_post"));
-  if (rails) group.add(modelForInstances(rails, "fence_rail"));
+  group.name = "timber-fence";
+  group.add(modelInstances("fence_post", postMatrices), modelInstances("fence_rail", railMatrices));
   return group;
 }
 
-function collectFenceLineMatrices(points, options, postMatrices, railMatrices) {
+function collectFenceLineMatrices(points, options, postMatrices, railMatrices, uniquePosts) {
   points.forEach(([x, z]) => {
+    const key = `${x.toFixed(3)},${z.toFixed(3)}`;
+    if (uniquePosts.has(key)) return;
+    uniquePosts.add(key);
     if (options.skipWater && !isDryObjectSpot(x, z, 2.8)) return;
     tempObject.position.set(x, terrainHeight(x, z) + options.postHeight * 0.5, z);
     tempObject.rotation.set(0, 0, 0);
@@ -2747,23 +2756,27 @@ function collectFenceLineMatrices(points, options, postMatrices, railMatrices) {
     const [x2, z2] = points[i + 1];
     const midX = (x1 + x2) * 0.5;
     const midZ = (z1 + z2) * 0.5;
-    if (options.skipWater && !isDryObjectSpot(midX, midZ, 4.2)) continue;
+    if (options.skipWater && (!isDryObjectSpot(midX, midZ, 4.2) ||
+      !isDryObjectSpot(x1, z1, 2.8) || !isDryObjectSpot(x2, z2, 2.8))) continue;
 
     options.railHeights.forEach((heightOffset) => {
       collectFenceRailMatrix(x1, z1, x2, z2, heightOffset, railMatrices);
     });
+    if (options.braces && i % 3 === 1) {
+      collectFenceRailMatrix(x1, z1, x2, z2, options.railHeights[0], railMatrices, options.railHeights[1]);
+    }
   }
 }
 
-function collectFenceRailMatrix(x1, z1, x2, z2, heightOffset, railMatrices) {
+function collectFenceRailMatrix(x1, z1, x2, z2, heightOffset, railMatrices, endHeight = heightOffset) {
   const start = new THREE.Vector3(x1, terrainHeight(x1, z1) + heightOffset, z1);
-  const end = new THREE.Vector3(x2, terrainHeight(x2, z2) + heightOffset, z2);
+  const end = new THREE.Vector3(x2, terrainHeight(x2, z2) + endHeight, z2);
   const direction = end.clone().sub(start);
   const length = direction.length();
   if (length < 0.1) return;
 
   tempObject.position.copy(start).addScaledVector(direction, 0.5);
-  tempObject.scale.set(length * 0.88, 1, 1);
+  tempObject.scale.set(length, 1, 1);
   tempObject.quaternion.setFromUnitVectors(tempVector.set(1, 0, 0), direction.normalize());
   tempObject.updateMatrix();
   railMatrices.push(tempObject.matrix.clone());
@@ -2806,18 +2819,11 @@ function addPastureFences() {
     [48, -34, 36, 29],
     [-2, 54, 30, 20]
   ].forEach(([x, z, width, depth]) => {
-    addRectFence(x, z, width, depth, 5.8);
+    addRectFence(x, z, width, depth, 4.8);
   });
 }
 
 function addRectFence(centerX, centerZ, width, depth, spacing) {
-  const postGeometry = new THREE.CylinderGeometry(0.1, 0.13, 1.18, 6);
-  const railGeometry = new THREE.BoxGeometry(1, 0.1, 0.1);
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x6d4a2b,
-    roughness: 0.86,
-    metalness: 0.02
-  });
   const halfWidth = width * 0.5;
   const halfDepth = depth * 0.5;
   const xSegments = Math.max(3, Math.round(width / spacing));
@@ -2839,12 +2845,11 @@ function addRectFence(centerX, centerZ, width, depth, spacing) {
     east.push([centerX + halfWidth, z]);
   }
 
+  // The southern opening reads as a pasture entrance; all rails meet their posts.
+  const gate = Math.floor(xSegments / 2);
   addLevelObject(createFenceGroup(
-    [north, south, west, east],
-    postGeometry,
-    railGeometry,
-    material,
-    { postHeight: 1.18, railHeights: [0.56, 0.9], skipWater: false }
+    [north, south.slice(0, gate + 1), south.slice(gate + 1), west, east],
+    { postHeight: 1.8, railHeights: [0.62, 1.22], braces: true, skipWater: true }
   ));
 }
 
@@ -5375,6 +5380,14 @@ async function runModelIntegrationChecks() {
         const boundary = scene.getObjectByName(`${level}-natural-boundary`);
         assert(boundary?.isMesh && !boundary.castShadow, `${level}: natural boundary missing`);
         assert(terrain.geometry.index.count / 3 === 25088, `${level}: terrain triangle budget`);
+      } else {
+        const boundary = scene.getObjectByName("farm-natural-boundary");
+        assert(boundary?.getObjectByName("instances-pine"), "Farm woodland boundary missing");
+        assert(boundary.getObjectByName("instances-rock"), "Farm boundary rocks missing");
+        boundary.traverse((object) => {
+          if (!object.isInstancedMesh) return;
+          for (const value of object.instanceMatrix.array) assert(Number.isFinite(value), "Invalid farm placement");
+        });
       }
       scene.traverse((node) => {
         if (node.userData.modelAsset) seen.add(node.userData.modelAsset);
@@ -5467,4 +5480,30 @@ async function runModelIntegrationChecks() {
 
 if (import.meta.env.DEV && hasRuntimeFlag("modelTest")) {
   requestAnimationFrame(() => runModelIntegrationChecks());
+}
+
+// Reproducible in-engine scenery captures for the press kit and visual review.
+// Kept out of production; this only poses the existing scene, never paints over it.
+if (import.meta.env.DEV) {
+  const preview = new URLSearchParams(location.search).get("scenePreview");
+  if (["farm", "desert", "ice", "boundary"].includes(preview)) {
+    requestAnimationFrame(() => {
+      renderer.setAnimationLoop(null);
+      applyLevel(preview === "boundary" ? "farm" : preview);
+      resetRunState();
+      setUiState(UI_STATES.PLAYING);
+      const boundary = preview === "boundary";
+      const [x, z] = boundary ? [0, -66] : [20, 30];
+      ufo.group.position.set(x, terrainHeight(x, z) + ufoCruiseHeight, z);
+      ufo.group.rotation.set(0.04, 2.7, -0.03);
+      camera.position.set(x + 30, terrainHeight(x, z) + 34, z + 38);
+      camera.lookAt(x, terrainHeight(x, z) + 1, boundary ? -76 : z - 5);
+      updateLandscape(5);
+      updateHud(true);
+      drawMinimap(5);
+      renderer.shadowMap.needsUpdate = true;
+      composer.render(0.016);
+      document.body.dataset.scenePreview = preview;
+    });
+  }
 }

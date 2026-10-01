@@ -16,6 +16,20 @@ For the live gallery, the full-resolution model overview was exported as a
 high-quality JPEG (406 KB) to fit itch.io's 3 MB image limit. The original PNG remains
 in this kit.
 
+## 2 October polish follow-up
+
+The follow-up fixes phantom UFO contact shadows and stale self-shadowing, remodels
+the timber fences and adds a mixed woodland boundary to Farm Night.
+`OVERVIEW.html` is the editable source for `media/overview-card.jpg`: text on the
+left, current in-engine imagery on the right. `farm-pastures.jpg` and
+`farm-boundary.jpg` use a posed preview camera in the actual runtime, without
+painting over the scene. The original gameplay captures remain available.
+
+Capture the scenery locally with `/?scenePreview=farm&forceItchCompat=1` or
+`/?scenePreview=boundary&forceItchCompat=1`; these views are development-only.
+The old YouTube trailer is removed from the page, and the four pre-redesign gallery
+images are replaced by the current presentation. The new cover remains unchanged.
+
 ## Upload the game
 
 Run `npm run package:itch` from the repository root (Node/npm + Python 3 required).

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { loadModelLibrary, createModel, modelForMesh, modelForInstances, retainModelResources, modelLibraryStats } from '../src/models/library.js';
 import { createUfo } from '../src/models/ufo.js';
+import { StableGTAOPass } from '../src/landscape/StableGTAOPass.js';
 
 const buffer = readFileSync(new URL('../assets/models/library/models.glb', import.meta.url));
 await loadModelLibrary(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
@@ -28,6 +29,24 @@ const ufo = createUfo();
 for (const key of ['rim','trail','engineGlow','boostGlow']) assert(ufo[key], `Missing ${key}`);
 assert(new THREE.Box3().setFromObject(ufo.group).getSize(new THREE.Vector3()).x <= 9.8);
 const hull = ufo.group.children.filter(o=>o.isMesh && !o.material.transparent);
+assert(hull.filter(part => part.castShadow).length > 0, 'UFO must retain its ground shadow');
+assert(hull.every(part => !part.receiveShadow), 'Moving hull must not receive stale self-shadows');
+// Invisible boost/glass/beam meshes must not become solid AO occluders, and the
+// pass must restore visibility exactly (including already hidden objects).
+const aoScene = new THREE.Scene();
+aoScene.add(ufo.group);
+const hidden = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+hidden.visible = false;
+aoScene.add(hidden);
+const ao = new StableGTAOPass(aoScene, new THREE.PerspectiveCamera(), 16, 16);
+const visibility = new Map();
+aoScene.traverse(part => visibility.set(part, part.visible));
+ao.overrideVisibility();
+assert(!ufo.boostGlow.visible && !ufo.trail.visible, 'Transparent engine effects leaked into AO');
+assert(hull.every(part => part.visible), 'AO must retain solid hull detail');
+ao.restoreVisibility();
+aoScene.traverse(part => assert.equal(part.visible, visibility.get(part), 'AO changed scene visibility'));
+ao.dispose(); hidden.geometry.dispose(); hidden.material.dispose();
 ufo.group.updateMatrixWorld(true);
 const hits = new THREE.Raycaster(new THREE.Vector3(2.3,20,18), new THREE.Vector3(0,-1,0)).intersectObjects(hull);
 assert(hits.some(hit=>hit.face.normal.y > 0), 'Hull top winding');

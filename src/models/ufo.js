@@ -4,6 +4,9 @@ import { createModel } from "./library.js";
 // The approved Blender hull, with the existing gameplay effect/animation contract.
 export function createUfo() {
   const group = createModel("ufo");
+  // The world shadow map is throttled on itch.io. Receiving the previous frame's
+  // own silhouette makes a moving hull flash; keep its ground shadow and GTAO.
+  group.traverse((part) => { if (part.isMesh) part.receiveShadow = false; });
   group.position.set(0, 12, 18);
   const finishes = { light: new THREE.MeshBasicMaterial({ color: 0x65ffe1 }) };
   const rim = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.04, 5, 48, Math.PI * 1.65), finishes.light);

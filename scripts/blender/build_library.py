@@ -231,10 +231,15 @@ joint('joint_rotor',(0,-3.05,11.65),parts); end(r)
 for key in ['fence_post','fence_rail']:
     r=begin(key)
     if key=='fence_post':
-        box('Fence • post',(0,0,0),(.22,.22,1.4),wood,.035)
-        cone('Fence • chamfer cap',(0,0,.74),.16,.08,.15,woodlight,4)
-        for z in (-.2,.25): ico('Fence • bolt',(0,-.123,z),(.028,.015,.028),copper,1)
-    else: box('Fence • rail',(0,0,0),(1,.12,.14),woodlight,.022)
+        box('Fence • hewn oak post',(0,0,-.06),(.38,.34,1.68),wood,.045)
+        box('Fence • weathered foot',(0,0,-.72),(.40,.36,.30),woodlight,.035)
+        cone('Fence • pyramidal cap',(0,0,.80),.28,0,.20,woodlight,4).rotation_euler.z=math.pi/4
+        # Fasteners line up with the two runtime rails; broad planes read in flight.
+        for z in (-.28,.32):
+            for side in (-1,1):
+                ico('Fence • iron peg',(0,side*.179,z),(.047,.022,.047),hoof,1)
+    else:
+        box('Fence • solid timber rail',(0,0,0),(1,.20,.22),woodlight,.024)
     end(r)
 r=begin('hay_bale')
 o=cone('Hay • rolled straw',(0,0,0),.72,.72,1.2,straw,10); o.rotation_euler.x=math.pi/2
