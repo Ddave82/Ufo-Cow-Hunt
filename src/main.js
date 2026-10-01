@@ -114,7 +114,7 @@ scene.fog = new THREE.FogExp2(0x061226, 0.012);
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  antialias: false, // EffectComposer uses SMAA; canvas MSAA would be redundant.
   powerPreference: "high-performance"
 });
 const initialPixelRatio = getTargetPixelRatio(initialRenderSize.width, initialRenderSize.height);
@@ -122,7 +122,8 @@ renderer.setPixelRatio(initialPixelRatio);
 renderer.setSize(initialRenderSize.width, initialRenderSize.height, false);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.shadowMap.autoUpdate = !ITCH_COMPAT_MODE;
+// RenderPass consumes this once; the GTAO normal pass reuses the same map.
+renderer.shadowMap.autoUpdate = false;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
@@ -175,7 +176,6 @@ let perfDebugFps = 60;
 const perfFrameTimes = [];
 let perfFrameCursor = 0;
 let lastPerfDebugUpdate = -Infinity;
-let lastShadowUpdate = -Infinity;
 
 const clock = new THREE.Clock();
 const tempObject = new THREE.Object3D();
@@ -312,6 +312,8 @@ let waterBodies = farmWaterBodies;
 let spawnBlockers = farmSpawnBlockers;
 let spawnObstacles = new SpawnObstacleIndex();
 let previousCowSpots = [];
+const spawnHeightOffsets = [[0, 0], [5.5, 0], [-5.5, 0], [0, 5.5], [0, -5.5],
+  [5.5 * 0.7, 5.5 * 0.7], [-5.5 * 0.7, 5.5 * 0.7], [5.5 * 0.7, -5.5 * 0.7], [-5.5 * 0.7, -5.5 * 0.7]];
 let cowSpawnZones = farmAnimalSpawnZones;
 let bonusSpawnZones = farmBonusSpawnZones;
 const keys = new Set();
@@ -992,7 +994,6 @@ function rebuildLevel() {
   spawnCollectibles();
   spawnPowerups();
   spawnHazards();
-  lastShadowUpdate = -Infinity;
   renderer.shadowMap.needsUpdate = true;
 }
 
@@ -3586,30 +3587,20 @@ function isSpawnSafe(x, z) {
   if (isWater(x, z, 12)) return false;
   if (!isClearOfSpawnBlockers(x, z, 4) || !spawnObstacles.isClear(x, z)) return false;
 
-  const sampleRadius = 5.5;
-  const sampleOffsets = [
-    [0, 0],
-    [sampleRadius, 0],
-    [-sampleRadius, 0],
-    [0, sampleRadius],
-    [0, -sampleRadius],
-    [sampleRadius * 0.7, sampleRadius * 0.7],
-    [-sampleRadius * 0.7, sampleRadius * 0.7],
-    [sampleRadius * 0.7, -sampleRadius * 0.7],
-    [-sampleRadius * 0.7, -sampleRadius * 0.7]
-  ];
-
-  const heights = sampleOffsets.map(([offsetX, offsetZ]) => {
+  // Reuse offsets and avoid allocating arrays/callbacks in every movement step.
+  let minHeight = Infinity;
+  let maxHeight = -Infinity;
+  for (const [offsetX, offsetZ] of spawnHeightOffsets) {
     const sampleX = x + offsetX;
     const sampleZ = z + offsetZ;
-    if (isWater(sampleX, sampleZ, 10)) return null;
-    return terrainHeight(sampleX, sampleZ);
-  });
-
-  if (heights.some((height) => height === null || height <= -0.72)) return false;
-  const minHeight = Math.min(...heights);
-  const maxHeight = Math.max(...heights);
-  return maxHeight - minHeight < 1.15;
+    if (isWater(sampleX, sampleZ, 10)) return false;
+    const height = terrainHeight(sampleX, sampleZ);
+    if (height <= -0.72) return false;
+    minHeight = Math.min(minHeight, height);
+    maxHeight = Math.max(maxHeight, height);
+    if (maxHeight - minHeight >= 1.15) return false;
+  }
+  return true;
 }
 
 function isClearOfSpawnBlockers(x, z, clearance = 0) {
@@ -3747,15 +3738,14 @@ function tick() {
     drawMinimap(elapsed);
   }
 
-  updateShadowMap(elapsed);
+  updateShadowMap();
   renderer.info.reset();
   composer.render();
 }
 
-function updateShadowMap(elapsed) {
-  if (!ITCH_COMPAT_MODE) return;
-  if (elapsed - lastShadowUpdate < 1 / 30) return;
-  lastShadowUpdate = elapsed;
+function updateShadowMap() {
+  // A moving UFO needs a matching ground silhouette on every displayed frame.
+  // A time throttle stutters (and drifts below 30 Hz with floating-point steps).
   renderer.shadowMap.needsUpdate = true;
 }
 
@@ -4101,8 +4091,13 @@ function maybeStartIdleWander(item, elapsed) {
 
 function isCollectibleMoveSafe(item, x, z) {
   if (!isSpawnSafe(x, z)) return false;
-  return collectibles.every(other => other === item || other.userData.collected ||
-    other.userData.active === false || Math.hypot(other.position.x - x, other.position.z - z) >= 5.5);
+  for (const other of collectibles) {
+    if (other === item || other.userData.collected || other.userData.active === false) continue;
+    const dx = other.position.x - x;
+    const dz = other.position.z - z;
+    if (dx * dx + dz * dz < 5.5 * 5.5) return false;
+  }
+  return true;
 }
 
 function findSafeMoveTarget(startX, startZ, dirX, dirZ, distance, item) {
@@ -5377,6 +5372,20 @@ async function runModelIntegrationChecks() {
       renderer.info.reset();
       composer.render(0.016);
       const renderBudget = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      let shadowUpdates = 0;
+      const updateShadowMatrices = moonLight.shadow.updateMatrices;
+      moonLight.shadow.updateMatrices = function (...args) {
+        shadowUpdates++;
+        return updateShadowMatrices.apply(this, args);
+      };
+      try {
+        for (let frame = 0; frame < 3; frame++) {
+          ufo.group.position.x += 0.15;
+          updateShadowMap();
+          composer.render(1 / 60);
+          assert(shadowUpdates === frame + 1, `${level}: shadows must update exactly once per displayed frame`);
+        }
+      } finally { moonLight.shadow.updateMatrices = updateShadowMatrices; }
       assert(composer.passes.at(-1) === smaaPass && smaaPass.enabled, `${level}: output anti-aliasing missing`);
       assert(!terrain.material.flatShading, `${level}: faceted ground shading`);
       for (const component of terrain.geometry.attributes.position.array) assert(Number.isFinite(component), `${level}: invalid terrain vertex`);
@@ -5559,4 +5568,54 @@ if (import.meta.env.DEV) {
       document.body.dataset.scenePreview = preview;
     });
   }
+}
+
+// Fixed flight path for before/after profiling. No scores or settings are saved.
+if (import.meta.env.DEV && hasRuntimeFlag("flightTest")) {
+  requestAnimationFrame(async () => {
+    renderer.setAnimationLoop(null);
+    soundMuted = true;
+    const report = [];
+    const percentile = (values, p) => [...values].sort((a, b) => a - b)[Math.floor(values.length * p)];
+    for (const level of ["farm", "desert", "ice"]) {
+      applyLevel(level); resetRunState(); prepareWave(2);
+      setUiState(UI_STATES.PLAYING);
+      waveTransitionActive = false;
+      const times = [], cpu = [], calls = [];
+      let previousTime;
+      let shadowUpdates = 0;
+      const beforeShadow = moonLight.shadow.updateMatrices;
+      moonLight.shadow.updateMatrices = function (...args) {
+        shadowUpdates++;
+        return beforeShadow.apply(this, args);
+      };
+      for (let frame = 0; frame < 240; frame++) {
+        const timestamp = await new Promise(resolve => requestAnimationFrame(resolve));
+        const start = performance.now();
+        const t = frame / 60;
+        ufo.group.position.set(Math.sin(t * 0.6) * 38, 13, Math.cos(t * 0.6) * 38);
+        ufo.group.rotation.set(Math.sin(t) * 0.06, t * 0.6, Math.cos(t) * 0.07);
+        camera.position.copy(ufo.group.position).add(new THREE.Vector3(22, 27, 34));
+        camera.lookAt(ufo.group.position.x, 0, ufo.group.position.z);
+        updateCollectibles(1 / 60, t + 10);
+        updateHazards(1 / 60, t + 10, false);
+        updateLandscape(t + 10);
+        updateShadowMap();
+        renderer.info.reset(); composer.render(1 / 60);
+        if (frame >= 60) {
+          times.push(timestamp - previousTime);
+          cpu.push(performance.now() - start);
+          calls.push(renderer.info.render.calls);
+        } else if (frame === 59) shadowUpdates = 0;
+        previousTime = timestamp;
+      }
+      moonLight.shadow.updateMatrices = beforeShadow;
+      report.push({ level, frames: times.length, shadowUpdates, callsP50: percentile(calls, 0.5),
+        frameP50: percentile(times, 0.5), frameP95: percentile(times, 0.95), cpuP50: percentile(cpu, 0.5), cpuP95: percentile(cpu, 0.95) });
+    }
+    const node = document.createElement("pre"); node.id = "flight-test-results";
+    node.textContent = JSON.stringify({compatibility: ITCH_COMPAT_MODE, buffer: [canvas.width, canvas.height], report}, null, 2);
+    node.style.cssText = "position:fixed;top:8px;left:8px;z-index:1000;background:#10231f;color:white;padding:12px;max-height:90vh;overflow:auto";
+    document.body.append(node);
+  });
 }

@@ -152,6 +152,8 @@ and boost scares: fresh positions, minimum spacing, dry ground and solid prop cl
 The checks reposition targets and advance simulation directly; they are not a full
 real-time playthrough or a test of itch.io hosting. The runner is removed from
 production builds. `?perfDebug=1` shows render counters and frame-time percentiles.
+Use development `?flightTest=1` (optionally with `&forceItchCompat=1`) for a fixed
+flight comparison; see the [shadow/performance report](docs/PERFORMANCE-2026-10-02.md).
 
 Implementation notes and the earlier rollback checkpoint are in
 [the historical September report](docs/GRAFIK-UPDATE.md). Current gameplay code lives

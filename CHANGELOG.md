@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-02 — Smooth UFO ground shadows
+
+- Synchronize the ground shadow with every rendered frame on itch.io.
+- Remove duplicate shadow-map rendering during the normal-path GTAO pass.
+- Disable redundant canvas MSAA while preserving final-image SMAA.
+- Reduce temporary allocations in animal movement safety checks.
+- Add a reproducible flight profiler and a one-shadow-update-per-frame regression check.
+
 ## 2026-10-02 — Safe animal distribution
 
 - Give every wave fresh animal positions with at least 9.5 units of separation.
