@@ -445,9 +445,19 @@ body[data-preview-level="ice"] .menu-panel {
   font-size: clamp(2rem, 6vw, 3.6rem);
 }
 
-#final-score {
+#end-screen #final-time,
+#end-screen #final-score {
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+#end-screen #final-time {
+  font-size: clamp(1.35rem, 3.5vw, 1.75rem);
+}
+
+#end-screen #final-score {
   color: #effcff;
-  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  font-size: clamp(1.75rem, 4.5vw, 2.4rem);
   text-shadow: 0 0 20px rgba(143, 235, 255, 0.55);
 }
 
